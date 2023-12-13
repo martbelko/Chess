@@ -10,7 +10,7 @@ if(CMAKE_VERSION VERSION_LESS_EQUAL 3.12)
 	message(FATAL_ERROR "The projet needs C++20 version")
 endif()
 
-set_property(GLOBAL PROPERTY ASSETS_PATH_PROP "${CMAKE_SOURCE_DIR}/App/assets")
+set_property(GLOBAL PROPERTY ASSETS_PATH_PROP "${CMAKE_SOURCE_DIR}/Chess/assets")
 
 add_subdirectory(WebgpuLib)
-add_subdirectory(App)
+add_subdirectory(Chess)
