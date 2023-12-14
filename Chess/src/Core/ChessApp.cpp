@@ -13,6 +13,8 @@
 
 #include <tinyobjloader/tiny_obj_loader.h>
 
+#include <GLFW/glfw3.h>
+
 namespace Chess {
 
 	using namespace Base;
@@ -29,11 +31,7 @@ namespace Chess {
 		const Base::Window* wnd = GetWindow();
 		m_Renderer = new Renderer(wnd->GetWidth(), wnd->GetHeight(), wnd);
 
-		tinyobj::attrib_t attributes;
-		std::vector<tinyobj::shape_t> shapes;
-		std::vector<tinyobj::material_t> materials;
-		std::string warning, error;
-		tinyobj::LoadObj(&attributes, &shapes, &materials, &warning, &error, "C:/Users/Martin/Desktop/Chess.obj", "C:/Users/Martin/Desktop/");
+		m_Camera.SetPosition(glm::vec3(0, 2, 50));
 
 		CreateViewportBasedPipelines();
 	}
@@ -45,19 +43,52 @@ namespace Chess {
 
 	void ChessApp::CreateViewportBasedPipelines()
 	{
+		tinyobj::attrib_t attributes;
+		std::vector<tinyobj::shape_t> shapes;
+		std::vector<tinyobj::material_t> materials;
+		std::string warning, error;
+		tinyobj::LoadObj(&attributes, &shapes, &materials, &warning, &error, "C:/Users/Martin/Desktop/Chess.obj", "C:/Users/Martin/Desktop/");
+
+		tinyobj::shape_t chessboard = shapes[17];
+
 		const Base::Window* wnd = GetWindow();
 
 		std::vector<Vertex3D> vertices;
-		float mult = 100;
-		vertices.push_back(Vertex3D{
-			.position = { mult * -0.5f, mult * -0.5f, 0.0f },
-			});
-		vertices.push_back(Vertex3D{
-			.position = { mult * 0.5f, mult * -0.5f, 0.0f },
-			});
-		vertices.push_back(Vertex3D{
-			.position = { mult * 0.0f, mult * 0.5f, 0.0f },
-			});
+		for (size_t i = 0; i < chessboard.mesh.indices.size(); i += 3)
+		{
+			tinyobj::index_t xIdx = chessboard.mesh.indices[i];
+			tinyobj::index_t yIdx = chessboard.mesh.indices[i + 1];
+			tinyobj::index_t zIdx = chessboard.mesh.indices[i + 2];
+
+			float x = attributes.vertices[xIdx.vertex_index];
+			float y = attributes.vertices[yIdx.vertex_index];
+			float z = attributes.vertices[zIdx.vertex_index];
+			vertices.push_back(Vertex3D{ .position = { x, y, z } });
+		}
+
+		auto loadVertex = [&](size_t index) -> glm::vec3
+		{
+			return glm::vec3(
+				attributes.vertices[index],
+				attributes.vertices[index + 1],
+				attributes.vertices[index + 2]);
+		};
+
+		//std::vector<Vertex3D> vertices;
+		//for (int i = 0; i < attributes.vertices.size() / 3; ++i)
+		//{
+		//	vertices.push_back(Vertex3D{ .position = loadVertex(i * 3) });
+		//}
+		//float mult = 100;
+		//vertices.push_back(Vertex3D{
+		//	.position = { mult * -0.5f, mult * -0.5f, 0.0f },
+		//	});
+		//vertices.push_back(Vertex3D{
+		//	.position = { mult * 0.5f, mult * -0.5f, 0.0f },
+		//	});
+		//vertices.push_back(Vertex3D{
+		//	.position = { mult * 0.0f, mult * 0.5f, 0.0f },
+		//	});
 
 		Ref<Shader> shader = Shader::CreateFromFile("Simple.wgsl");
 
@@ -114,11 +145,21 @@ namespace Chess {
 		const WindowResizedEvent* lastWindowResizeEvent = nullptr;
 		for (const Event& ev : GetWindow()->GetEvents())
 		{
+			constexpr float camSensitivity = 0.1f;
 			switch (ev.type)
 			{
 			case EventType::WindowResized:
 				lastWindowResizeEvent = &ev.as.windowResizedEvent;
 				break;
+			case EventType::MouseMoved:
+			{
+				static glm::vec2 lastPos = { ev.as.mouseMovedEvent.xPos, ev.as.mouseMovedEvent.yPos };
+				glm::vec2 currentPos = { ev.as.mouseMovedEvent.xPos, ev.as.mouseMovedEvent.yPos };
+				glm::vec2 delta = currentPos - lastPos;
+				m_Camera.OnMouseMove(delta * camSensitivity);
+				lastPos = currentPos;
+				break;
+			}
 			}
 		}
 
@@ -127,16 +168,23 @@ namespace Chess {
 			m_Renderer->OnWindowResize(lastWindowResizeEvent->width, lastWindowResizeEvent->height);
 			CreateViewportBasedPipelines();
 		}
+
+		float cameraSpeed = 0.1f;
+		if (glfwGetKey(GetWindow()->GetWindowHandle(), GLFW_KEY_W))
+		{
+			m_Camera.SetPosition(m_Camera.GetPosition() + m_Camera.GetForwardDirection() * cameraSpeed);
+		}
 	}
 
 	void ChessApp::Render()
 	{
 		float aspect = static_cast<float>(GetWindow()->GetWidth()) / GetWindow()->GetHeight();
+		m_Camera.SetProjection(glm::radians(75.0f), aspect, 0.01f, 1000.0f);
 
 		CameraBuffer cameraBuffer;
-		cameraBuffer.view = glm::inverse(glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, 100.0f)));
-		cameraBuffer.projection = glm::perspective(glm::radians(75.0f), aspect, 0.01f, 1000.0f);
-		cameraBuffer.viewProjection = cameraBuffer.projection * cameraBuffer.view;
+		cameraBuffer.view = m_Camera.GetViewMatrix();
+		cameraBuffer.projection = m_Camera.GetProjectionMatrix();
+		cameraBuffer.viewProjection = m_Camera.GetViewProjectionMatrix();
 
 		m_CameraBuffer->SetData(&cameraBuffer, sizeof(CameraBuffer));
 

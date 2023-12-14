@@ -4,6 +4,8 @@
 
 #include "Renderer/Renderer.h"
 
+#include "Scene/Camera.h"
+
 namespace Chess {
 
 	class ChessApp : public Base::Application
@@ -21,6 +23,7 @@ namespace Chess {
 	private:
 		float m_LastFrameTime;
 		Renderer* m_Renderer;
+		PerspectiveCamera m_Camera;
 
 		RenderPipeline m_MainPipeline;
 		Ref<DataBuffer> m_CameraBuffer;

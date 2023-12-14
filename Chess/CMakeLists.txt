@@ -20,6 +20,9 @@ add_executable(Chess
 	"src/Renderer/Texture.cpp"
 	"src/Renderer/VertexBuffer.h"
 	"src/Renderer/VertexBuffer.cpp"
+
+	"src/Scene/Camera.h"
+	"src/Scene/Camera.cpp"
 )
 
 target_compile_definitions(Chess
