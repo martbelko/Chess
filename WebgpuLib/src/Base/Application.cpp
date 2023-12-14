@@ -55,7 +55,7 @@ namespace Base {
 		{
 			switch (ev.type)
 			{
-			case  EventType::WindowResized:
+			case EventType::WindowResized:
 				lastWindowResizeEvent = &ev.as.windowResizedEvent;
 				break;
 			case EventType::WindowClosed:

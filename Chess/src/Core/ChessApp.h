@@ -12,6 +12,8 @@ namespace Chess {
 		ChessApp();
 		~ChessApp();
 
+		void CreateViewportBasedPipelines();
+
 		virtual void Update(Base::Timestep ts) override;
 		virtual void Render() override;
 
@@ -19,7 +21,9 @@ namespace Chess {
 	private:
 		float m_LastFrameTime;
 		Renderer* m_Renderer;
+
 		RenderPipeline m_MainPipeline;
+		Ref<DataBuffer> m_CameraBuffer;
 		wgpu::TextureView m_DepthStencilTextureView;
 	};
 
