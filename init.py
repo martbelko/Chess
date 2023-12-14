@@ -2,6 +2,8 @@ import os
 
 oldwd = os.getcwd()
 
+os.system("git submodule update --init --depth=1")
+
 os.chdir('./WebgpuLib/vendor/dawn/ext/dawn/third_party/')
 os.system('git submodule init protobuf')
 os.system('git submodule update protobuf')

@@ -1,10 +1,26 @@
-﻿project(App CXX)
+﻿project(Chess CXX)
 
-add_executable(App
-	"src/Playground.cpp"
-)
+add_executable(Chess
+	"src/Core/Playground.cpp"
 
-target_compile_definitions(App
+	"src/Renderer/ColorTarget.h"
+	"src/Renderer/DataBuffer.h"
+	"src/Renderer/DataBuffer.cpp"
+	"src/Renderer/Renderer.h"
+	"src/Renderer/Renderer.cpp"
+	"src/Renderer/RenderPipeline.h"
+	"src/Renderer/RenderPipeline.cpp"
+	"src/Renderer/RenderPipelineBuilder.h"
+	"src/Renderer/RenderPipelineBuilder.cpp"
+	"src/Renderer/Shader.h"
+	"src/Renderer/Shader.cpp"
+	"src/Renderer/Texture.h"
+	"src/Renderer/Texture.cpp"
+	"src/Renderer/VertexBuffer.h"
+	"src/Renderer/VertexBuffer.cpp"
+ "src/Core/Base.h")
+
+target_compile_definitions(Chess
 	PRIVATE
 	"_CRT_SECURE_NO_WARNINGS"
 
@@ -15,26 +31,27 @@ target_compile_definitions(App
 	$<$<CONFIG:RelWithDebInfo>:SS_REL_DEB_INFO>
 )
 
-set(BINARY_DIR ${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}/)
-
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/imgui "vendor/imgui")
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/glm "vendor/glm")
+add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/tinyobjloader "vendor/tinyobjloader")
 
-target_link_libraries(App PUBLIC IMGUI_LIB GLM_LIB)
+target_link_libraries(Chess PUBLIC IMGUI_LIB GLM_LIB TINY_OBJ_LOADER_LIB)
 
 ConfigureProject()
 
 if (EMSCRIPTEN)
-	target_compile_definitions(App PRIVATE PLATFORM_WEB)
+	target_compile_definitions(Chess PRIVATE PLATFORM_WEB)
 elseif(WIN32)
-	target_compile_definitions(App PRIVATE PLATFORM_WINDOWS)
+	target_compile_definitions(Chess PRIVATE PLATFORM_WINDOWS)
 elseif(APPLE)
-	target_compile_definitions(App PRIVATE PLATFORM_MAC)
+	target_compile_definitions(Chess PRIVATE PLATFORM_MAC)
 elseif(UNIX)
-	target_compile_definitions(App PRIVATE PLATFORM_LINUX)
+	target_compile_definitions(Chess PRIVATE PLATFORM_LINUX)
 endif()
 
-set_property(TARGET App PROPERTY CXX_STANDARD 20)
+set_property(TARGET Chess PROPERTY CXX_STANDARD 20)
 
-target_include_directories(App PUBLIC ${WEBGPU_LIB_SOURCE_DIR}/src)
-target_link_libraries(App PUBLIC WEBGPU_LIB)
+target_include_directories(Chess PUBLIC ${WEBGPU_LIB_SOURCE_DIR}/src)
+target_include_directories(Chess PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+
+target_link_libraries(Chess PUBLIC WEBGPU_LIB)

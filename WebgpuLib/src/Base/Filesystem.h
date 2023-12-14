@@ -9,7 +9,7 @@ namespace Base {
 	class Filesystem
 	{
 	public:
-		std::optional<std::string> ReadFile(const std::filesystem::path& relativeFilepath);
+		static std::optional<std::string> ReadFile(const std::filesystem::path& relativeFilepath);
 	private:
 		static void Init();
 	private:

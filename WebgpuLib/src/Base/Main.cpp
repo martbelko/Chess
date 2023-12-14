@@ -16,7 +16,7 @@ int main(int argc, char* argv[])
 {
 	Base::Application* app = CreateApplication();
 	app->Run();
-#if !defined(SS_PLATFORM_WEB)
+#if !defined(PLATFORM_WEB)
 	delete app;
 #endif
 	return 0;
