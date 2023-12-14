@@ -1,7 +1,9 @@
 ﻿project(Chess CXX)
 
 add_executable(Chess
-	"src/Core/Playground.cpp"
+	"src/Core/Base.h"
+	"src/Core/ChessApp.h"
+	"src/Core/ChessApp.cpp"
 
 	"src/Renderer/ColorTarget.h"
 	"src/Renderer/DataBuffer.h"
@@ -18,7 +20,7 @@ add_executable(Chess
 	"src/Renderer/Texture.cpp"
 	"src/Renderer/VertexBuffer.h"
 	"src/Renderer/VertexBuffer.cpp"
- "src/Core/Base.h")
+)
 
 target_compile_definitions(Chess
 	PRIVATE

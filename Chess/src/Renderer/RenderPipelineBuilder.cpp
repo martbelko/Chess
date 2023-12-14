@@ -170,7 +170,7 @@ namespace Chess {
 								return wgpu::TextureSampleType::Depth;
 						}
 
-						ERROR("Unknow texture format");
+						LOG_ERROR("Unknow texture format");
 						return wgpu::TextureSampleType::Float;
 					};
 
@@ -269,6 +269,11 @@ namespace Chess {
 		for (const auto& [dataBuffer, bindGroup] : dataBuffers)
 		{
 			pipeline.AddDataBuffer(dataBuffer, bindGroup);
+		}
+
+		if (m_DepthStencilTexture)
+		{
+			pipeline.SetDepthStencilTexture(m_DepthStencilTexture);
 		}
 
 		GraphicsContext::GetDevice().Tick();

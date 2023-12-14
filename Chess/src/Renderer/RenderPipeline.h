@@ -22,6 +22,8 @@ namespace Chess {
 
 		void AddDataBuffer(const Ref<DataBuffer>& dataBuffer, wgpu::BindGroup bindBroup) { m_DataBuffers.emplace_back(dataBuffer, bindBroup); }
 
+		void SetDepthStencilTexture(const Ref<Texture>& depthStencilTexture) { m_DepthStencilTexture = depthStencilTexture; }
+
 		void Bind(wgpu::RenderPassEncoder renderPass);
 
 		wgpu::RenderPipeline GetRendererPtr() const { return m_RendererPtr; }
@@ -29,6 +31,7 @@ namespace Chess {
 		const std::vector<std::pair<Ref<DataBuffer>, wgpu::BindGroup>>& GetDataBuffers() const { return m_DataBuffers; }
 	private:
 		wgpu::RenderPipeline m_RendererPtr;
+		Ref<Texture> m_DepthStencilTexture = nullptr;
 		std::vector<Ref<VertexBuffer>> m_VertexBuffers;
 		std::vector<std::pair<Ref<DataBuffer>, wgpu::BindGroup>> m_DataBuffers;
 	};

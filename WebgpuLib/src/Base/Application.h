@@ -16,6 +16,8 @@ namespace Base {
 		virtual void Update(Timestep ts) = 0;
 		virtual void Render() = 0;
 		virtual void RenderImGui() = 0;
+
+		const Window* GetWindow() const { return m_Window; }
 	private:
 		void Run();
 		void OnFrame(Timestep ts);

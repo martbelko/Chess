@@ -21,8 +21,8 @@ namespace Base {
 
 }
 
-#define TRACE(...)         ::Base::Log::GetLogger()->Trace(__VA_ARGS__)
-#define INFO(...)          ::Base::Log::GetLogger()->Info(__VA_ARGS__)
-#define WARN(...)          ::Base::Log::GetLogger()->Warn(__VA_ARGS__)
-#define ERROR(...)         ::Base::Log::GetLogger()->Error(__VA_ARGS__)
-#define CRITICAL(...)      ::Base::Log::GetLogger()->Critical(__VA_ARGS__)
+#define LOG_TRACE(...)         ::Base::Log::GetLogger()->Trace(__VA_ARGS__)
+#define LOG_INFO(...)          ::Base::Log::GetLogger()->Info(__VA_ARGS__)
+#define LOG_WARN(...)          ::Base::Log::GetLogger()->Warn(__VA_ARGS__)
+#define LOG_ERROR(...)         ::Base::Log::GetLogger()->Error(__VA_ARGS__)
+#define LOG_CRITICAL(...)      ::Base::Log::GetLogger()->Critical(__VA_ARGS__)

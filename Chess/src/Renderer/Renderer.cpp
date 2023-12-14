@@ -23,9 +23,25 @@ namespace Chess {
 		return (size + alignment - 1) & ~(alignment - 1);
 	}
 
-	Renderer::Renderer(u32 width, u32 height)
+	Renderer::Renderer(u32 width, u32 height, const Base::Window* window)
 		: m_ViewportWidth(width), m_ViewportHeight(height)
 	{
+		IMGUI_CHECKVERSION();
+		ImGui::CreateContext();
+		ImGuiIO& io = ImGui::GetIO();
+		(void)io;
+		io.IniFilename = nullptr;
+
+		ImGui::StyleColorsDark();
+
+		ImGui_ImplGlfw_InitForOther(window->GetWindowHandle(), true);
+		ImGui_ImplWGPU_Init(GraphicsContext::GetDevice().Get(), 3, static_cast<WGPUTextureFormat>(GraphicsContext::GetDefaultTextureFormat()));
+	}
+
+	Renderer::~Renderer()
+	{
+		ImGui_ImplWGPU_Shutdown();
+		ImGui_ImplGlfw_Shutdown();
 	}
 
 	void Renderer::BeginScene()
@@ -74,7 +90,7 @@ namespace Chess {
 
 	void Renderer::Finish()
 	{
-#if !defined(SS_PLATFORM_WEB)
+#if !defined(PLATFORM_WEB)
 		GraphicsContext::GetSwapChain().Present();
 		GraphicsContext::GetDevice().Tick();
 #endif

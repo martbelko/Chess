@@ -22,7 +22,7 @@ namespace Base {
 			}
 			else
 			{
-				CRITICAL(message);
+				LOG_CRITICAL(message);
 				ASSERT(false, "Could not get WebGPU adapter");
 			}
 
@@ -61,7 +61,7 @@ namespace Base {
 				}
 				else
 				{
-					CRITICAL(message);
+					LOG_CRITICAL(message);
 					ASSERT(false, "Could not get WebGPU device");
 				}
 				userData.requestEnded = true;

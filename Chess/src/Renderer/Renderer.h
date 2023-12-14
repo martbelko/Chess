@@ -12,10 +12,16 @@
 
 namespace Chess {
 
+	struct Vertex3D
+	{
+		glm::vec3 position;
+	};
+
 	class Renderer
 	{
 	public:
-		Renderer(u32 width, u32 height);
+		Renderer(u32 width, u32 height, const Base::Window* window);
+		~Renderer();
 
 		void BeginScene();
 		void EndScene();

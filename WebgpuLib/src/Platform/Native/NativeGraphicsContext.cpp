@@ -54,11 +54,11 @@ namespace Base {
 
 		s_Device.SetUncapturedErrorCallback([](WGPUErrorType type, char const* message, void* pUserData)
 		{
-			ERROR("WebGPU Error: {0}", message);
+			LOG_ERROR("WebGPU Error: {0}", message);
 		}, nullptr);
 		s_Device.SetLoggingCallback([](WGPULoggingType type, char const* message, void* userdata)
 		{
-			ERROR("WebGPU log: {0}", message);
+			LOG_ERROR("WebGPU log: {0}", message);
 		}, nullptr);
 
 		s_Queue = s_Device.GetQueue();
