@@ -23,6 +23,7 @@ add_executable(Chess
 
 	"src/Scene/Camera.h"
 	"src/Scene/Camera.cpp"
+	"src/Scene/ObjLoader.h"
 )
 
 target_compile_definitions(Chess

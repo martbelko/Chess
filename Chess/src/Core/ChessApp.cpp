@@ -6,6 +6,8 @@
 #include "Renderer/RenderPipelineBuilder.h"
 #include "Renderer/VertexBuffer.h"
 
+#include "Scene/ObjLoader.h"
+
 #include <imgui/imgui.h>
 
 #include <glm/glm.hpp>
@@ -31,8 +33,6 @@ namespace Chess {
 		const Base::Window* wnd = GetWindow();
 		m_Renderer = new Renderer(wnd->GetWidth(), wnd->GetHeight(), wnd);
 
-		m_Camera.SetPosition(glm::vec3(0, 2, 50));
-
 		CreateViewportBasedPipelines();
 	}
 
@@ -43,53 +43,19 @@ namespace Chess {
 
 	void ChessApp::CreateViewportBasedPipelines()
 	{
-		tinyobj::attrib_t attributes;
-		std::vector<tinyobj::shape_t> shapes;
-		std::vector<tinyobj::material_t> materials;
-		std::string warning, error;
-		tinyobj::LoadObj(&attributes, &shapes, &materials, &warning, &error, "C:/Users/Martin/Desktop/Chess.obj", "C:/Users/Martin/Desktop/");
-
-		tinyobj::shape_t chessboard = shapes[17];
-
-		const Base::Window* wnd = GetWindow();
+		objl::Loader loader;
+		bool loadout = loader.LoadFile("C:/Users/Pc/Desktop/chess.obj");
 
 		std::vector<Vertex3D> vertices;
-		for (size_t i = 0; i < chessboard.mesh.indices.size(); i += 3)
+		for (const auto& vertex : loader.LoadedMeshes[16].Vertices)
 		{
-			tinyobj::index_t xIdx = chessboard.mesh.indices[i];
-			tinyobj::index_t yIdx = chessboard.mesh.indices[i + 1];
-			tinyobj::index_t zIdx = chessboard.mesh.indices[i + 2];
-
-			float x = attributes.vertices[xIdx.vertex_index];
-			float y = attributes.vertices[yIdx.vertex_index];
-			float z = attributes.vertices[zIdx.vertex_index];
+			float x = vertex.Position.X;
+			float y = vertex.Position.Y;
+			float z = vertex.Position.Z;
 			vertices.push_back(Vertex3D{ .position = { x, y, z } });
 		}
 
-		auto loadVertex = [&](size_t index) -> glm::vec3
-		{
-			return glm::vec3(
-				attributes.vertices[index],
-				attributes.vertices[index + 1],
-				attributes.vertices[index + 2]);
-		};
-
-		//std::vector<Vertex3D> vertices;
-		//for (int i = 0; i < attributes.vertices.size() / 3; ++i)
-		//{
-		//	vertices.push_back(Vertex3D{ .position = loadVertex(i * 3) });
-		//}
-		//float mult = 100;
-		//vertices.push_back(Vertex3D{
-		//	.position = { mult * -0.5f, mult * -0.5f, 0.0f },
-		//	});
-		//vertices.push_back(Vertex3D{
-		//	.position = { mult * 0.5f, mult * -0.5f, 0.0f },
-		//	});
-		//vertices.push_back(Vertex3D{
-		//	.position = { mult * 0.0f, mult * 0.5f, 0.0f },
-		//	});
-
+		const Window* wnd = GetWindow();
 		Ref<Shader> shader = Shader::CreateFromFile("Simple.wgsl");
 
 		m_CameraBuffer = DataBuffer::CreateUniformBufferFromSize(sizeof(CameraBuffer));
@@ -145,7 +111,7 @@ namespace Chess {
 		const WindowResizedEvent* lastWindowResizeEvent = nullptr;
 		for (const Event& ev : GetWindow()->GetEvents())
 		{
-			constexpr float camSensitivity = 0.1f;
+			const float camSensitivity = 50.0f * ts.GetSeconds();
 			switch (ev.type)
 			{
 			case EventType::WindowResized:
@@ -160,6 +126,12 @@ namespace Chess {
 				lastPos = currentPos;
 				break;
 			}
+			case Base::EventType::MousePressed:
+				m_Camera.OnMouseButtonPressed(ev.as.mousePressedEvent);
+				break;
+			case Base::EventType::MouseReleased:
+				m_Camera.OnMouseButtonReleased(ev.as.mouseReleasedEvent);
+				break;
 			}
 		}
 
@@ -167,12 +139,6 @@ namespace Chess {
 		{
 			m_Renderer->OnWindowResize(lastWindowResizeEvent->width, lastWindowResizeEvent->height);
 			CreateViewportBasedPipelines();
-		}
-
-		float cameraSpeed = 0.1f;
-		if (glfwGetKey(GetWindow()->GetWindowHandle(), GLFW_KEY_W))
-		{
-			m_Camera.SetPosition(m_Camera.GetPosition() + m_Camera.GetForwardDirection() * cameraSpeed);
 		}
 	}
 
