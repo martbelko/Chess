@@ -26,12 +26,80 @@ namespace Chess {
 		glm::mat4 view;
 		glm::mat4 projection;
 		glm::mat4 viewProjection;
+		glm::vec4 position;
 	};
 
 	ChessApp::ChessApp()
 	{
 		const Base::Window* wnd = GetWindow();
 		m_Renderer = new Renderer(wnd->GetWidth(), wnd->GetHeight(), wnd);
+
+		objl::Loader loader;
+		if (!loader.LoadFile("C:/Users/Pc/Desktop/chessboard.obj"))
+		{
+			LOG_ERROR("Could not load .obj file");
+		}
+		else
+		{
+			std::vector<Vertex3D> vertices;
+			std::vector<u64> counts;
+			std::vector<Material> materials;
+			counts.reserve(loader.LoadedMeshes.size());
+
+			auto objlVec3ToGlm = [](const objl::Vector3 v) -> glm::vec3
+			{
+				float x = v.X;
+				float y = v.Y;
+				float z = v.Z;
+				return glm::vec3(x, y, z);
+			};
+
+			for (const objl::Mesh& mesh : loader.LoadedMeshes)
+			{
+				for (u32 index : mesh.Indices)
+				{
+					const objl::Vertex& vertex = mesh.Vertices[index];
+
+					float px = vertex.Position.X;
+					float py = vertex.Position.Y;
+					float pz = vertex.Position.Z;
+
+					float nx = vertex.Normal.X;
+					float ny = vertex.Normal.Y;
+					float nz = vertex.Normal.Z;
+
+					float uvx = vertex.TextureCoordinate.X;
+					float uvy = vertex.TextureCoordinate.Y;
+
+					vertices.push_back(Vertex3D{ .position = { px, py, pz }, .normal = { nx, ny, nz }, .uv = { uvx, uvy } });
+				}
+
+				glm::vec4 ambient = glm::vec4(objlVec3ToGlm(mesh.MeshMaterial.Ka), 1.0f);
+				glm::vec4 diffuse = glm::vec4(objlVec3ToGlm(mesh.MeshMaterial.Kd), 1.0f);
+				glm::vec4 specular = glm::vec4(objlVec3ToGlm(mesh.MeshMaterial.Ks), 1.0f);
+
+				materials.push_back(Material(ambient, diffuse, specular));
+				counts.push_back(vertices.size());
+			}
+
+			m_SceneVbo = VertexBuffer::CreateFromData(vertices.data(), vertices.size(), sizeof(Vertex3D));
+
+			u64 from = 0;
+			for (size_t i = 0; i < counts.size(); ++i)
+			{
+				u64 count = counts[i];
+				const Material& mat = materials[i];
+
+				VertexBufferView vboView = VertexBufferView(m_SceneVbo, from, count - 1);
+				from = count;
+
+				Node* parent = m_Scene.GetSceneGraph().GetRoot();
+
+				Mesh mesh = Mesh(vboView, mat);
+				Node* node = new Node(mesh);
+				m_Scene.GetSceneGraph().AddNode(node, parent);
+			}
+		}
 
 		CreateViewportBasedPipelines();
 	}
@@ -43,29 +111,18 @@ namespace Chess {
 
 	void ChessApp::CreateViewportBasedPipelines()
 	{
-		objl::Loader loader;
-		bool loadout = loader.LoadFile("C:/Users/Pc/Desktop/chess.obj");
-
-		std::vector<Vertex3D> vertices;
-		for (const auto& vertex : loader.LoadedMeshes[16].Vertices)
-		{
-			float x = vertex.Position.X;
-			float y = vertex.Position.Y;
-			float z = vertex.Position.Z;
-			vertices.push_back(Vertex3D{ .position = { x, y, z } });
-		}
-
 		const Window* wnd = GetWindow();
 		Ref<Shader> shader = Shader::CreateFromFile("Simple.wgsl");
 
 		m_CameraBuffer = DataBuffer::CreateUniformBufferFromSize(sizeof(CameraBuffer));
 		DataBufferLayout cameraBufferLayout{
-			{ sizeof(CameraBuffer), wgpu::ShaderStage::Vertex }
+			{ sizeof(CameraBuffer), wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment }
 		};
 
-		Ref<VertexBuffer> vbo = VertexBuffer::CreateFromData(vertices.data(), vertices.size(), sizeof(Vertex3D));
 		BufferLayout vboLayout = {
-			{ wgpu::VertexFormat::Float32x3 }
+			{ wgpu::VertexFormat::Float32x3 },
+			{ wgpu::VertexFormat::Float32x3 },
+			{ wgpu::VertexFormat::Float32x2 }
 		};
 
 		Ref<Texture> depthTexture = Texture::CreateDepthStencilTexture(wnd->GetWidth(), wnd->GetHeight(), wgpu::TextureFormat::Depth24Plus);
@@ -97,7 +154,7 @@ namespace Chess {
 		RenderPipelineBuilder builder;
 		builder.AddColorTarget(ColorTargetDesc());
 		builder.AddShader(shader);
-		builder.AddVertexBuffer(vbo, vboLayout);
+		builder.AddVertexBuffer(m_SceneVbo, vboLayout);
 		builder.AddDepthStencilTexture(depthTexture, depthTextureDesc);
 		builder.AddDataBuffer(m_CameraBuffer, cameraBufferLayout);
 
@@ -140,6 +197,8 @@ namespace Chess {
 			m_Renderer->OnWindowResize(lastWindowResizeEvent->width, lastWindowResizeEvent->height);
 			CreateViewportBasedPipelines();
 		}
+
+		m_Scene.GetSceneGraph().Update();
 	}
 
 	void ChessApp::Render()
@@ -151,6 +210,7 @@ namespace Chess {
 		cameraBuffer.view = m_Camera.GetViewMatrix();
 		cameraBuffer.projection = m_Camera.GetProjectionMatrix();
 		cameraBuffer.viewProjection = m_Camera.GetViewProjectionMatrix();
+		cameraBuffer.position = glm::vec4(m_Camera.GetPosition(), 1.0f);
 
 		m_CameraBuffer->SetData(&cameraBuffer, sizeof(CameraBuffer));
 
@@ -183,7 +243,13 @@ namespace Chess {
 
 		m_MainPipeline.Bind(renderPass);
 
-		renderPass.Draw(m_MainPipeline.GetVertexBuffers()[0]->GetVertexCount(), 1, 0, 0);
+		for (const Node* node : m_Scene.GetSceneGraph().GetRoot()->children)
+		{
+			u64 from = node->mesh.vboView.from;
+			u64 to = node->mesh.vboView.to;
+
+			renderPass.Draw(to - from + 1, 1, from, 0);
+		}
 
 		renderPass.End();
 

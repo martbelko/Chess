@@ -20,11 +20,19 @@ add_executable(Chess
 	"src/Renderer/Texture.cpp"
 	"src/Renderer/VertexBuffer.h"
 	"src/Renderer/VertexBuffer.cpp"
+	"src/Renderer/Mesh.h"
+	"src/Renderer/Mesh.cpp"
+	"src/Renderer/RenderData.h"
 
 	"src/Scene/Camera.h"
 	"src/Scene/Camera.cpp"
 	"src/Scene/ObjLoader.h"
-)
+	"src/Scene/Node.h"
+	"src/Scene/SceneGraph.h"
+	"src/Scene/SceneGraph.cpp"
+	"src/Scene/Scene.h"
+	"src/Scene/Scene.cpp"
+ "src/Renderer/VertexBufferView.h" "src/Renderer/Material.h")
 
 target_compile_definitions(Chess
 	PRIVATE

@@ -3,6 +3,7 @@
 #include "Core/Base.h"
 
 #include "Renderer/RenderPipeline.h"
+#include "Renderer/RenderData.h"
 
 #include <webgpu/webgpu_cpp.h>
 
@@ -11,11 +12,6 @@
 #include <vector>
 
 namespace Chess {
-
-	struct Vertex3D
-	{
-		glm::vec3 position;
-	};
 
 	class Renderer
 	{

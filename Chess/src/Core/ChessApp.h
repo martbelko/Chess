@@ -4,6 +4,7 @@
 
 #include "Renderer/Renderer.h"
 
+#include "Scene/Scene.h"
 #include "Scene/Camera.h"
 
 namespace Chess {
@@ -23,8 +24,10 @@ namespace Chess {
 	private:
 		float m_LastFrameTime;
 		Renderer* m_Renderer;
+		Scene m_Scene;
 		PerspectiveCamera m_Camera;
 
+		Ref<VertexBuffer> m_SceneVbo;
 		RenderPipeline m_MainPipeline;
 		Ref<DataBuffer> m_CameraBuffer;
 		wgpu::TextureView m_DepthStencilTextureView;
