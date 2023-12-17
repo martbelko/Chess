@@ -4,6 +4,7 @@ add_executable(Chess
 	"src/Core/Base.h"
 	"src/Core/ChessApp.h"
 	"src/Core/ChessApp.cpp"
+	"src/Core/UUID.h"
 
 	"src/Renderer/ColorTarget.h"
 	"src/Renderer/DataBuffer.h"
@@ -23,6 +24,8 @@ add_executable(Chess
 	"src/Renderer/Mesh.h"
 	"src/Renderer/Mesh.cpp"
 	"src/Renderer/RenderData.h"
+	"src/Renderer/VertexBufferView.h"
+	"src/Renderer/Material.h"
 
 	"src/Scene/Camera.h"
 	"src/Scene/Camera.cpp"
@@ -32,7 +35,9 @@ add_executable(Chess
 	"src/Scene/SceneGraph.cpp"
 	"src/Scene/Scene.h"
 	"src/Scene/Scene.cpp"
- "src/Renderer/VertexBufferView.h" "src/Renderer/Material.h")
+	"src/Scene/Entity.h"
+	"src/Scene/Components.h"
+)
 
 target_compile_definitions(Chess
 	PRIVATE
@@ -48,8 +53,9 @@ target_compile_definitions(Chess
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/imgui "vendor/imgui")
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/glm "vendor/glm")
 add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/tinyobjloader "vendor/tinyobjloader")
+add_subdirectory(${CMAKE_SOURCE_DIR}/vendor/entt "vendor/entt")
 
-target_link_libraries(Chess PUBLIC IMGUI_LIB GLM_LIB TINY_OBJ_LOADER_LIB)
+target_link_libraries(Chess PUBLIC IMGUI_LIB GLM_LIB TINY_OBJ_LOADER_LIB ENTT_LIB)
 
 ConfigureProject()
 

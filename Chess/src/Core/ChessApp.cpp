@@ -5,8 +5,13 @@
 #include "Renderer/Renderer.h"
 #include "Renderer/RenderPipelineBuilder.h"
 #include "Renderer/VertexBuffer.h"
+#include "Renderer/VertexBufferView.h"
+#include "Renderer/Material.h"
 
 #include "Scene/ObjLoader.h"
+#include "Scene/Components.h"
+#include "Scene/Node.h"
+#include "Scene/Entity.h"
 
 #include <imgui/imgui.h>
 
@@ -21,6 +26,12 @@ namespace Chess {
 
 	using namespace Base;
 
+	struct ObjectBuffer
+	{
+		glm::mat4 model;
+		glm::mat4 modelInv;
+	};
+
 	struct CameraBuffer
 	{
 		glm::mat4 view;
@@ -29,22 +40,39 @@ namespace Chess {
 		glm::vec4 position;
 	};
 
+	struct MaterialBuffer
+	{
+		glm::vec4 ambient;
+		glm::vec4 diffuse;
+		glm::vec4 specular;
+	};
+
 	ChessApp::ChessApp()
 	{
 		const Base::Window* wnd = GetWindow();
 		m_Renderer = new Renderer(wnd->GetWidth(), wnd->GetHeight(), wnd);
 
+		m_Scene = CreateRef<Scene>();
+
+		constexpr float CELL_SIZE = 4.3f;
+
 		objl::Loader loader;
-		if (!loader.LoadFile("C:/Users/Pc/Desktop/chessboard.obj"))
+		if (!loader.LoadFile("C:/Users/Pc/Desktop/chess-simple.obj"))
 		{
 			LOG_ERROR("Could not load .obj file");
 		}
 		else
 		{
+			struct MeshDesc
+			{
+				std::string name;
+				u64 endIndex;
+				Material material;
+			};
+
 			std::vector<Vertex3D> vertices;
-			std::vector<u64> counts;
-			std::vector<Material> materials;
-			counts.reserve(loader.LoadedMeshes.size());
+			std::vector<MeshDesc> meshDescs;
+			meshDescs.reserve(loader.LoadedMeshes.size());
 
 			auto objlVec3ToGlm = [](const objl::Vector3 v) -> glm::vec3
 			{
@@ -78,30 +106,62 @@ namespace Chess {
 				glm::vec4 diffuse = glm::vec4(objlVec3ToGlm(mesh.MeshMaterial.Kd), 1.0f);
 				glm::vec4 specular = glm::vec4(objlVec3ToGlm(mesh.MeshMaterial.Ks), 1.0f);
 
-				materials.push_back(Material(ambient, diffuse, specular));
-				counts.push_back(vertices.size());
+				meshDescs.push_back(MeshDesc{
+					.name = mesh.MeshName,
+					.endIndex = vertices.size(),
+					.material = Material(ambient, diffuse, specular)
+				});
 			}
 
 			m_SceneVbo = VertexBuffer::CreateFromData(vertices.data(), vertices.size(), sizeof(Vertex3D));
 
+			Node* chessboard = m_Scene->AddNode(m_Scene->GetRoot(), "Chessboard");
+
 			u64 from = 0;
-			for (size_t i = 0; i < counts.size(); ++i)
+			for (size_t i = 0; i < meshDescs.size(); i++)
 			{
-				u64 count = counts[i];
-				const Material& mat = materials[i];
+				u64 endIndex = meshDescs[i].endIndex;
+				const Material& mat = meshDescs[i].material;
 
-				VertexBufferView vboView = VertexBufferView(m_SceneVbo, from, count - 1);
-				from = count;
+				VertexBufferView vboView = VertexBufferView(m_SceneVbo, from, endIndex - 1);
+				from = endIndex;
 
-				Node* parent = m_Scene.GetSceneGraph().GetRoot();
+				std::string name = meshDescs[i].name;
+				if (name == "Chessboard")
+				{
+					name = "Chessboard_1";
+				}
 
 				Mesh mesh = Mesh(vboView, mat);
-				Node* node = new Node(mesh);
-				m_Scene.GetSceneGraph().AddNode(node, parent);
+				Node* node = m_Scene->AddNode(chessboard, name);
+				node->entity.AddComponent<MeshComponent>(mesh);
 			}
 		}
 
 		CreateViewportBasedPipelines();
+
+		auto makeMove = [&](i8 fromX, i8 fromY, i8 toX, i8 toY, TransformComponent& tc) -> void
+		{
+			float xDiff = toX - fromX;
+			float yDiff = toY - fromY;
+			glm::vec3 diff = glm::vec3(xDiff, 0.0f, -yDiff) * CELL_SIZE;
+			tc.translation += diff;
+		};
+
+		for (Node* node : m_Scene->CreateView<MeshComponent>())
+		{
+			const std::string& tag = node->entity.GetComponent<TagComponent>().tag;
+			if (tag.starts_with("Chessboard"))
+			{
+				continue;
+			}
+
+			TransformComponent& tc = node->entity.GetComponent<TransformComponent>();
+			makeMove(0, 0, 2, 2, tc);
+		}
+
+		TransformComponent& tc = m_Scene->GetNodeByName("Chessboard")->entity.GetComponent<TransformComponent>();
+		tc.translation = glm::vec3(10.0f, 0.0f, 0.0f);
 	}
 
 	ChessApp::~ChessApp()
@@ -114,9 +174,20 @@ namespace Chess {
 		const Window* wnd = GetWindow();
 		Ref<Shader> shader = Shader::CreateFromFile("Simple.wgsl");
 
+		m_ObjectUbo = DataBuffer::CreateUniformBufferFromSize(sizeof(ObjectBuffer));
 		m_CameraBuffer = DataBuffer::CreateUniformBufferFromSize(sizeof(CameraBuffer));
+		m_MaterialUbo = DataBuffer::CreateUniformBufferFromSize(sizeof(MaterialBuffer));
+
+		DataBufferLayout objectBufferLayout{
+			{ sizeof(ObjectBuffer), wgpu::ShaderStage::Vertex }
+		};
+
 		DataBufferLayout cameraBufferLayout{
 			{ sizeof(CameraBuffer), wgpu::ShaderStage::Vertex | wgpu::ShaderStage::Fragment }
+		};
+
+		DataBufferLayout materialBufferLayout{
+			{ sizeof(MaterialBuffer), wgpu::ShaderStage::Fragment }
 		};
 
 		BufferLayout vboLayout = {
@@ -156,7 +227,9 @@ namespace Chess {
 		builder.AddShader(shader);
 		builder.AddVertexBuffer(m_SceneVbo, vboLayout);
 		builder.AddDepthStencilTexture(depthTexture, depthTextureDesc);
+		builder.AddDataBuffer(m_ObjectUbo, objectBufferLayout);
 		builder.AddDataBuffer(m_CameraBuffer, cameraBufferLayout);
+		builder.AddDataBuffer(m_MaterialUbo, materialBufferLayout);
 
 		m_MainPipeline = builder.Build();
 	}
@@ -198,7 +271,7 @@ namespace Chess {
 			CreateViewportBasedPipelines();
 		}
 
-		m_Scene.GetSceneGraph().Update();
+		m_Scene->Update();
 	}
 
 	void ChessApp::Render()
@@ -216,15 +289,11 @@ namespace Chess {
 
 		wgpu::TextureView nextTexture = GraphicsContext::GetSwapChain().GetCurrentTextureView();
 
-		wgpu::CommandEncoderDescriptor commandEncoderDesc;
-		commandEncoderDesc.label = "DisplayTexture_CommandEncoder";
-		wgpu::CommandEncoder encoder = GraphicsContext::GetDevice().CreateCommandEncoder(&commandEncoderDesc);
-
 		wgpu::RenderPassColorAttachment renderPassColorAttachment;
 		renderPassColorAttachment.view = nextTexture;
 		renderPassColorAttachment.loadOp = wgpu::LoadOp::Clear;
 		renderPassColorAttachment.storeOp = wgpu::StoreOp::Store;
-		renderPassColorAttachment.clearValue = wgpu::Color{ 0.0, 0.0, 0.0, 0.0 };
+		renderPassColorAttachment.clearValue = wgpu::Color{ 0.2, 0.3, 0.4, 0.0 };
 
 		wgpu::RenderPassDepthStencilAttachment depthStencilAttachment;
 		depthStencilAttachment.view = m_DepthStencilTextureView;
@@ -239,24 +308,49 @@ namespace Chess {
 		renderPassDesc.colorAttachments = &renderPassColorAttachment;
 		renderPassDesc.depthStencilAttachment = &depthStencilAttachment;
 		renderPassDesc.timestampWrites = nullptr;
-		wgpu::RenderPassEncoder renderPass = encoder.BeginRenderPass(&renderPassDesc);
 
-		m_MainPipeline.Bind(renderPass);
+		wgpu::CommandEncoderDescriptor commandEncoderDesc;
+		commandEncoderDesc.label = "DisplayTexture_CommandEncoder";
 
-		for (const Node* node : m_Scene.GetSceneGraph().GetRoot()->children)
+		for (Node* node : m_Scene->CreateView<MeshComponent>())
 		{
-			u64 from = node->mesh.vboView.from;
-			u64 to = node->mesh.vboView.to;
+			wgpu::CommandEncoder encoder = GraphicsContext::GetDevice().CreateCommandEncoder(&commandEncoderDesc);
+			wgpu::RenderPassEncoder renderPass = encoder.BeginRenderPass(&renderPassDesc);
+
+			const TransformComponent& transformComponent = node->entity.GetComponent<TransformComponent>();
+			const MeshComponent& meshComponent = node->entity.GetComponent<MeshComponent>();
+
+			u64 from = meshComponent.mesh.vboView.from;
+			u64 to = meshComponent.mesh.vboView.to;
+			const Material& mat = meshComponent.mesh.material;
+
+			ObjectBuffer objectBuffer{
+				.model = transformComponent.worldMatrix,
+				.modelInv = glm::inverse(transformComponent.worldMatrix)
+			};
+
+			MaterialBuffer materialBuffer{
+				.ambient = mat.ambient,
+				.diffuse = mat.diffuse,
+				.specular = mat.specular
+			};
+
+			m_ObjectUbo->SetData(&objectBuffer, sizeof(ObjectBuffer));
+			m_MaterialUbo->SetData(&materialBuffer, sizeof(MaterialBuffer));
+
+			m_MainPipeline.Bind(renderPass);
 
 			renderPass.Draw(to - from + 1, 1, from, 0);
+			renderPass.End();
+
+			wgpu::CommandBufferDescriptor cmdBufferDescriptor;
+			cmdBufferDescriptor.label = "DisplayTexture_CommandBuffer";
+			wgpu::CommandBuffer command = encoder.Finish(&cmdBufferDescriptor);
+			GraphicsContext::GetQueue().Submit(1, &command);
+
+			renderPassColorAttachment.loadOp = wgpu::LoadOp::Load;
+			depthStencilAttachment.depthLoadOp = wgpu::LoadOp::Load;
 		}
-
-		renderPass.End();
-
-		wgpu::CommandBufferDescriptor cmdBufferDescriptor2;
-		cmdBufferDescriptor2.label = "DisplayTexture_CommandBuffer";
-		wgpu::CommandBuffer command2 = encoder.Finish(&cmdBufferDescriptor2);
-		GraphicsContext::GetQueue().Submit(1, &command2);
 
 		m_Renderer->Finish();
 	}

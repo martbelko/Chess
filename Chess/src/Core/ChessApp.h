@@ -24,12 +24,14 @@ namespace Chess {
 	private:
 		float m_LastFrameTime;
 		Renderer* m_Renderer;
-		Scene m_Scene;
+		Ref<Scene> m_Scene;
 		PerspectiveCamera m_Camera;
 
 		Ref<VertexBuffer> m_SceneVbo;
-		RenderPipeline m_MainPipeline;
+		Ref<DataBuffer> m_ObjectUbo;
 		Ref<DataBuffer> m_CameraBuffer;
+		Ref<DataBuffer> m_MaterialUbo;
+		RenderPipeline m_MainPipeline;
 		wgpu::TextureView m_DepthStencilTextureView;
 	};
 

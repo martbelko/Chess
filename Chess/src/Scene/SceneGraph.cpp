@@ -1,15 +1,16 @@
 #include "SceneGraph.h"
 
 #include "Renderer/RenderData.h"
+#include "Renderer/Material.h"
+
+#include "Scene/Node.h"
+#include "Scene/Entity.h"
 
 namespace Chess {
 
-	SceneGraph::SceneGraph()
+	SceneGraph::SceneGraph(const Entity& rootEntity)
 	{
-		Ref<VertexBuffer> emptyVbo = VertexBuffer::CreateFromSize(1, sizeof(Vertex3D));
-		Mesh emptyMesh = Mesh(emptyVbo);
-
-		m_Root = new Node(emptyMesh);
+		m_Root = new Node(rootEntity);
 		m_Root->parent = nullptr;
 
 		m_Count = 1;
@@ -17,6 +18,7 @@ namespace Chess {
 
 	SceneGraph::~SceneGraph()
 	{
+		bool x = m_Root == nullptr;
 		Delete(m_Root);
 	}
 
@@ -33,10 +35,23 @@ namespace Chess {
 
 	void SceneGraph::UpdateInternal(Node* node, const glm::mat4& accumulatedTransform) const
 	{
-		node->m_GlobalTransform = node->CalculateLocalTransform() * accumulatedTransform;
-		for (Node* child : node->children)
+		Entity entity = node->entity;
+		if (entity.HasComponent<TransformComponent>())
 		{
-			UpdateInternal(child, node->m_GlobalTransform);
+			TransformComponent& tc = entity.GetComponent<TransformComponent>();
+			tc.worldMatrix = tc.CalculateLocalTransform() * accumulatedTransform;
+
+			for (Node* child : node->children)
+			{
+				UpdateInternal(child, tc.worldMatrix);
+			}
+		}
+		else
+		{
+			for (Node* child : node->children)
+			{
+				UpdateInternal(child, accumulatedTransform);
+			}
 		}
 	}
 

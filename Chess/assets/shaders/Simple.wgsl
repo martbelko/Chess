@@ -1,3 +1,8 @@
+struct ObjectBuffer {
+	model: mat4x4f,
+	modelInv: mat4x4f
+}
+
 struct CameraBuffer {
 	view: mat4x4f,
 	projection: mat4x4f,
@@ -5,12 +10,20 @@ struct CameraBuffer {
 	position: vec3f
 }
 
-@group(0) @binding(0) var<uniform> u_Camera: CameraBuffer;
+struct MaterialBuffer {
+	ambient: vec4f,
+	diffuse: vec4f,
+	specular: vec4f
+}
+
+@group(0) @binding(0) var<uniform> u_Object: ObjectBuffer;
+@group(1) @binding(0) var<uniform> u_Camera: CameraBuffer;
+@group(2) @binding(0) var<uniform> u_Material: MaterialBuffer;
 
 struct VertexInput {
 	@location(0) a_Pos: vec3f,
 	@location(1) a_Normal: vec3f,
-	@location(1) a_TexCoord: vec2f
+	@location(2) a_TexCoord: vec2f
 }
 
 struct VertexOutput {
@@ -22,9 +35,10 @@ struct VertexOutput {
 @vertex
 fn vs_main(input: VertexInput) -> VertexOutput {
 	var output: VertexOutput;
-	output.position = u_Camera.viewProjection * vec4f(input.a_Pos, 1.0);
+	output.position = u_Camera.viewProjection * u_Object.model * vec4f(input.a_Pos, 1.0);
 	output.fragPos = input.a_Pos;
-	output.normal = input.a_Normal;
+	var trans = mat3x3(u_Object.modelInv[0].xyz, u_Object.modelInv[1].xyz, u_Object.modelInv[2].xyz);
+	output.normal = trans * input.a_Normal;
 	return output;
 }
 
@@ -32,21 +46,22 @@ fn vs_main(input: VertexInput) -> VertexOutput {
 fn fs_main(input: VertexOutput) -> @location(0) vec4f {
 	var lightPos = vec3f(10, 10, 10);
 
-	var color = vec3f(0.2, 0.8, 0.1);
 	// ambient
-	var ambient = 0.5 * color;
+	var ambient = 0.15 * u_Material.ambient;
 	// diffuse
 	var lightDir = normalize(lightPos - input.fragPos);
 	var normal = normalize(input.normal);
 	var diff = max(dot(lightDir, normal), 0.0);
-	var diffuse = diff * color;
+	var diffuse = diff * u_Material.diffuse;
 	// specular
 	var viewDir = normalize(u_Camera.position - input.fragPos);
 	var reflectDir = reflect(-lightDir, normal);
 	var spec = 0.0;
 	var halfwayDir = normalize(lightDir + viewDir);  
 	spec = pow(max(dot(normal, halfwayDir), 0.0), 32.0);
-	var specular = vec3f(0.3) * spec; // assuming bright white light color
+	var specular = u_Material.specular * spec;
 
-	return vec4f(ambient + diffuse + specular, 1.0);
+	var color = ambient + diffuse + specular;
+	color.a = 1.0;
+	return color;
 }
