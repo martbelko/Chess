@@ -9,14 +9,17 @@ namespace Chess {
 	class Position
 	{
 	public:
-		Position(u8 x = 0, u8 y = 0)
+		constexpr Position(u8 x = 0, u8 y = 0)
 		{
 			m_Data = (x << 4) | y;
 		}
 
-		u8 GetX() const { return m_Data >> 4; }
-		u8 GetY() const { return (m_Data & 0x0F); }
-		std::pair<u8, u8> Get() const { return std::make_pair(GetX(), GetY()); }
+		constexpr u8 GetX() const { return m_Data >> 4; }
+		constexpr u8 GetY() const { return (m_Data & 0x0F); }
+		constexpr std::pair<u8, u8> Get() const { return std::make_pair(GetX(), GetY()); }
+
+		constexpr bool operator==(const Position& other) const { return m_Data == other.m_Data; }
+		constexpr bool operator!=(const Position& other) const { return m_Data != other.m_Data; }
 	private:
 		u8 m_Data;
 	};
