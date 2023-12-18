@@ -116,6 +116,8 @@ namespace Chess {
 			m_SceneVbo = VertexBuffer::CreateFromData(vertices.data(), vertices.size(), sizeof(Vertex3D));
 
 			Node* chessboard = m_Scene->AddNode(m_Scene->GetRoot(), "Chessboard");
+			Node* chessPieces = m_Scene->AddNode(chessboard, "ChessPieces");
+			Node* chessGround = m_Scene->AddNode(chessboard, "ChessGround");
 
 			u64 from = 0;
 			for (size_t i = 0; i < meshDescs.size(); i++)
@@ -126,42 +128,65 @@ namespace Chess {
 				VertexBufferView vboView = VertexBufferView(m_SceneVbo, from, endIndex - 1);
 				from = endIndex;
 
-				std::string name = meshDescs[i].name;
-				if (name == "Chessboard")
-				{
-					name = "Chessboard_1";
-				}
-
 				Mesh mesh = Mesh(vboView, mat);
-				Node* node = m_Scene->AddNode(chessboard, name);
-				node->entity.AddComponent<MeshComponent>(mesh);
+
+				std::string name = meshDescs[i].name;
+				if (name == "Chessboard" || name == "Chessboard_2")
+				{
+					if (name == "Chessboard")
+					{
+						name = "Chessboard_1";
+					}
+
+					Node* node = m_Scene->AddNode(chessboard, name);
+					node->entity.AddComponent<MeshComponent>(mesh);
+				}
+				else
+				{
+					if (name.length() == 2)
+					{
+						Node* node = m_Scene->AddNode(chessGround, name);
+						node->entity.AddComponent<MeshComponent>(mesh);
+					}
+					else
+					{
+						Node* node = m_Scene->AddNode(chessPieces, name);
+						node->entity.AddComponent<MeshComponent>(mesh);
+					}
+				}
 			}
 		}
 
 		CreateViewportBasedPipelines();
 
 		auto makeMove = [&](i8 fromX, i8 fromY, i8 toX, i8 toY, TransformComponent& tc) -> void
+			{
+				float xDiff = toX - fromX;
+				float yDiff = toY - fromY;
+				glm::vec3 diff = glm::vec3(xDiff, 0.0f, -yDiff) * CELL_SIZE;
+				tc.translation += diff;
+			};
+
+		for (Node* node : m_Scene->GetNodeByName("ChessPieces")->children)
 		{
-			float xDiff = toX - fromX;
-			float yDiff = toY - fromY;
-			glm::vec3 diff = glm::vec3(xDiff, 0.0f, -yDiff) * CELL_SIZE;
-			tc.translation += diff;
-		};
+			TransformComponent& tc = node->entity.GetComponent<TransformComponent>();
+			makeMove(0, 0, 2, 2, tc);
+		}
 
 		for (Node* node : m_Scene->CreateView<MeshComponent>())
 		{
 			const std::string& tag = node->entity.GetComponent<TagComponent>().tag;
-			if (tag.starts_with("Chessboard"))
+			if (tag.starts_with("Chessboard") || tag.size() == 2)
 			{
 				continue;
 			}
 
 			TransformComponent& tc = node->entity.GetComponent<TransformComponent>();
-			makeMove(0, 0, 2, 2, tc);
+			//makeMove(0, 0, 2, 2, tc);
 		}
 
 		TransformComponent& tc = m_Scene->GetNodeByName("Chessboard")->entity.GetComponent<TransformComponent>();
-		tc.translation = glm::vec3(10.0f, 0.0f, 0.0f);
+		//tc.translation = glm::vec3(10.0f, 0.0f, 0.0f);
 	}
 
 	ChessApp::~ChessApp()

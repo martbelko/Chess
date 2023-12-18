@@ -37,6 +37,9 @@ add_executable(Chess
 	"src/Scene/Scene.cpp"
 	"src/Scene/Entity.h"
 	"src/Scene/Components.h"
+
+	"src/Game/Move.h"
+	"src/Game/ChessState.h"
 )
 
 target_compile_definitions(Chess
