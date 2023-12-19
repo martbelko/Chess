@@ -43,10 +43,11 @@ namespace Chess {
 
 	struct MeshComponent
 	{
-		Mesh mesh;
+		Ref<Mesh> mesh;
+		Ref<Material> material;
 
-		MeshComponent(const Mesh& mesh)
-			: mesh(mesh) {}
+		MeshComponent(const Ref<Mesh>& mesh, const Ref<Material> material)
+			: mesh(mesh), material(material) {}
 	};
 
 }

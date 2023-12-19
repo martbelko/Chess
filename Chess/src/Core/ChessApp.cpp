@@ -26,12 +26,6 @@ namespace Chess {
 
 	using namespace Base;
 
-	struct ObjectBuffer
-	{
-		glm::mat4 model;
-		glm::mat4 modelInv;
-	};
-
 	struct CameraBuffer
 	{
 		glm::mat4 view;
@@ -40,17 +34,13 @@ namespace Chess {
 		glm::vec4 position;
 	};
 
-	struct MaterialBuffer
-	{
-		glm::vec4 ambient;
-		glm::vec4 diffuse;
-		glm::vec4 specular;
-	};
-
 	ChessApp::ChessApp()
 	{
 		const Base::Window* wnd = GetWindow();
 		m_Renderer = new Renderer(wnd->GetWidth(), wnd->GetHeight(), wnd);
+
+		m_RenderObjectsBuffer.reserve(MAX_INSTANCE_OBJECT_COUNT);
+		m_RenderMaterialsBuffer.reserve(MAX_INSTANCE_OBJECT_COUNT);
 
 		m_Scene = CreateRef<Scene>();
 
@@ -67,7 +57,7 @@ namespace Chess {
 			{
 				std::string name;
 				u64 endIndex;
-				Material material;
+				Ref<Material> material;
 			};
 
 			std::vector<Vertex3D> vertices;
@@ -81,6 +71,17 @@ namespace Chess {
 				float z = v.Z;
 				return glm::vec3(x, y, z);
 			};
+
+			for (const objl::Material& loadedMat : loader.LoadedMaterials)
+			{
+				Ref<Material> material = CreateRef<Material>(
+					glm::vec4(objlVec3ToGlm(loadedMat.Ka), 1.0f),
+					glm::vec4(objlVec3ToGlm(loadedMat.Kd), 1.0f),
+					glm::vec4(objlVec3ToGlm(loadedMat.Ks), 1.0f)
+				);
+
+				m_MaterialSystem.RegisterMaterial(loadedMat.name, material);
+			}
 
 			for (const objl::Mesh& mesh : loader.LoadedMeshes)
 			{
@@ -102,14 +103,10 @@ namespace Chess {
 					vertices.push_back(Vertex3D{ .position = { px, py, pz }, .normal = { nx, ny, nz }, .uv = { uvx, uvy } });
 				}
 
-				glm::vec4 ambient = glm::vec4(objlVec3ToGlm(mesh.MeshMaterial.Ka), 1.0f);
-				glm::vec4 diffuse = glm::vec4(objlVec3ToGlm(mesh.MeshMaterial.Kd), 1.0f);
-				glm::vec4 specular = glm::vec4(objlVec3ToGlm(mesh.MeshMaterial.Ks), 1.0f);
-
 				meshDescs.push_back(MeshDesc{
 					.name = mesh.MeshName,
 					.endIndex = vertices.size(),
-					.material = Material(ambient, diffuse, specular)
+					.material = m_MaterialSystem.GetMaterialByName(mesh.MeshMaterial.name)
 				});
 			}
 
@@ -123,12 +120,12 @@ namespace Chess {
 			for (size_t i = 0; i < meshDescs.size(); i++)
 			{
 				u64 endIndex = meshDescs[i].endIndex;
-				const Material& mat = meshDescs[i].material;
+				Ref<Material> material = meshDescs[i].material;
 
 				VertexBufferView vboView = VertexBufferView(m_SceneVbo, from, endIndex - 1);
 				from = endIndex;
 
-				Mesh mesh = Mesh(vboView, mat);
+				Ref<Mesh> mesh = CreateRef<Mesh>(vboView);
 
 				std::string name = meshDescs[i].name;
 				if (name == "Chessboard" || name == "Chessboard_2")
@@ -139,19 +136,19 @@ namespace Chess {
 					}
 
 					Node* node = m_Scene->AddNode(chessboard, name);
-					node->entity.AddComponent<MeshComponent>(mesh);
+					node->entity.AddComponent<MeshComponent>(mesh, material);
 				}
 				else
 				{
 					if (name.length() == 2)
 					{
 						Node* node = m_Scene->AddNode(chessGround, name);
-						node->entity.AddComponent<MeshComponent>(mesh);
+						node->entity.AddComponent<MeshComponent>(mesh, material);
 					}
 					else
 					{
 						Node* node = m_Scene->AddNode(chessPieces, name);
-						node->entity.AddComponent<MeshComponent>(mesh);
+						node->entity.AddComponent<MeshComponent>(mesh, material);
 					}
 				}
 			}
@@ -194,17 +191,30 @@ namespace Chess {
 		delete m_Renderer;
 	}
 
+	void ChessApp::SetChessboardRender()
+	{
+		for (const Piece& piece : m_ChessState.GetPieces())
+		{
+			if (piece.IsActive())
+			{
+				continue;
+			}
+
+
+		}
+	}
+
 	void ChessApp::CreateViewportBasedPipelines()
 	{
 		const Window* wnd = GetWindow();
 		Ref<Shader> shader = Shader::CreateFromFile("Simple.wgsl");
 
-		m_ObjectUbo = DataBuffer::CreateUniformBufferFromSize(sizeof(ObjectBuffer));
+		m_ObjectUbo = DataBuffer::CreateUniformBufferFromSize(sizeof(ObjectBuffer) * MAX_INSTANCE_OBJECT_COUNT);
 		m_CameraBuffer = DataBuffer::CreateUniformBufferFromSize(sizeof(CameraBuffer));
-		m_MaterialUbo = DataBuffer::CreateUniformBufferFromSize(sizeof(MaterialBuffer));
+		m_MaterialUbo = DataBuffer::CreateUniformBufferFromSize(sizeof(MaterialBuffer) * MAX_INSTANCE_OBJECT_COUNT);
 
 		DataBufferLayout objectBufferLayout{
-			{ sizeof(ObjectBuffer), wgpu::ShaderStage::Vertex }
+			{ sizeof(ObjectBuffer) * MAX_INSTANCE_OBJECT_COUNT, wgpu::ShaderStage::Vertex }
 		};
 
 		DataBufferLayout cameraBufferLayout{
@@ -212,7 +222,7 @@ namespace Chess {
 		};
 
 		DataBufferLayout materialBufferLayout{
-			{ sizeof(MaterialBuffer), wgpu::ShaderStage::Fragment }
+			{ sizeof(MaterialBuffer) * MAX_INSTANCE_OBJECT_COUNT, wgpu::ShaderStage::Fragment }
 		};
 
 		BufferLayout vboLayout = {
@@ -301,6 +311,19 @@ namespace Chess {
 
 	void ChessApp::Render()
 	{
+		std::vector<Node*> nodes = m_Scene->CreateView<MeshComponent>();
+		if (nodes.empty())
+		{
+			return;
+		}
+
+		std::sort(nodes.begin(), nodes.end(), [](Node* a, Node* b)
+		{
+			u64 mc1 = reinterpret_cast<u64>(a->entity.GetComponent<MeshComponent>().material.get());
+			u64 mc2 = reinterpret_cast<u64>(b->entity.GetComponent<MeshComponent>().material.get());
+			return mc1 < mc2;
+		});
+
 		float aspect = static_cast<float>(GetWindow()->GetWidth()) / GetWindow()->GetHeight();
 		m_Camera.SetProjection(glm::radians(75.0f), aspect, 0.01f, 1000.0f);
 
@@ -335,30 +358,42 @@ namespace Chess {
 		renderPassDesc.timestampWrites = nullptr;
 
 		wgpu::CommandEncoderDescriptor commandEncoderDesc;
-		commandEncoderDesc.label = "DisplayTexture_CommandEncoder";
+		commandEncoderDesc.label = "CommandEncoder";
 
-		for (Node* node : m_Scene->CreateView<MeshComponent>())
+		Ref<Material> currentMaterial = nodes[0]->entity.GetComponent<MeshComponent>().material;
+		u32 instancesCount = 0;
+
+		m_RenderObjectsBuffer.clear();
+		m_RenderMaterialsBuffer.clear();
+
+		for (Node* node : nodes)
 		{
+			const MeshComponent& mc = node->entity.GetComponent<MeshComponent>();
+			if (currentMaterial == mc.material)
+			{
+				ObjectBuffer objectBuffer{
+					.model = transformComponent.worldMatrix,
+					.modelInv = glm::inverse(transformComponent.worldMatrix)
+				};
+
+				MaterialBuffer materialBuffer{
+					.ambient = material->ambient,
+					.diffuse = material->diffuse,
+					.specular = material->specular
+				};
+
+				m_RenderObjectsBuffer.push_back(cur)
+			}
+
 			wgpu::CommandEncoder encoder = GraphicsContext::GetDevice().CreateCommandEncoder(&commandEncoderDesc);
 			wgpu::RenderPassEncoder renderPass = encoder.BeginRenderPass(&renderPassDesc);
 
 			const TransformComponent& transformComponent = node->entity.GetComponent<TransformComponent>();
 			const MeshComponent& meshComponent = node->entity.GetComponent<MeshComponent>();
 
-			u64 from = meshComponent.mesh.vboView.from;
-			u64 to = meshComponent.mesh.vboView.to;
-			const Material& mat = meshComponent.mesh.material;
-
-			ObjectBuffer objectBuffer{
-				.model = transformComponent.worldMatrix,
-				.modelInv = glm::inverse(transformComponent.worldMatrix)
-			};
-
-			MaterialBuffer materialBuffer{
-				.ambient = mat.ambient,
-				.diffuse = mat.diffuse,
-				.specular = mat.specular
-			};
+			u64 from = meshComponent.mesh->vboView.from;
+			u64 to = meshComponent.mesh->vboView.to;
+			const Ref<Material>& material = meshComponent.material;
 
 			m_ObjectUbo->SetData(&objectBuffer, sizeof(ObjectBuffer));
 			m_MaterialUbo->SetData(&materialBuffer, sizeof(MaterialBuffer));
@@ -369,7 +404,7 @@ namespace Chess {
 			renderPass.End();
 
 			wgpu::CommandBufferDescriptor cmdBufferDescriptor;
-			cmdBufferDescriptor.label = "DisplayTexture_CommandBuffer";
+			cmdBufferDescriptor.label = "CommandBuffer";
 			wgpu::CommandBuffer command = encoder.Finish(&cmdBufferDescriptor);
 			GraphicsContext::GetQueue().Submit(1, &command);
 

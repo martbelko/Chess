@@ -26,6 +26,8 @@ add_executable(Chess
 	"src/Renderer/RenderData.h"
 	"src/Renderer/VertexBufferView.h"
 	"src/Renderer/Material.h"
+	"src/Renderer/MaterialSystem.h"
+	 "src/Renderer/MaterialSystem.cpp"
 
 	"src/Scene/Camera.h"
 	"src/Scene/Camera.cpp"
@@ -39,8 +41,7 @@ add_executable(Chess
 	"src/Scene/Components.h"
 
 	"src/Game/Move.h"
-	"src/Game/ChessState.h"
-)
+	"src/Game/ChessState.h")
 
 target_compile_definitions(Chess
 	PRIVATE

@@ -8,10 +8,9 @@ namespace Chess {
 	struct Mesh
 	{
 		VertexBufferView vboView;
-		Material material;
 
-		Mesh(VertexBufferView vboView, Material material)
-			: vboView(vboView), material(material) {}
+		Mesh(const VertexBufferView& vboView)
+			: vboView(vboView) {}
 	};
 
 }
