@@ -44,7 +44,7 @@ namespace Chess {
 
 		m_Scene = CreateRef<Scene>();
 
-		constexpr float CELL_SIZE = 4.3f;
+		constexpr float CELL_SIZE = 4.30658f;
 
 		objl::Loader loader;
 		if (!loader.LoadFile("C:/Users/Pc/Desktop/chess-simple.obj"))
@@ -142,8 +142,35 @@ namespace Chess {
 				{
 					if (name.length() == 2)
 					{
-						Node* node = m_Scene->AddNode(chessGround, name);
-						node->entity.AddComponent<MeshComponent>(mesh, material);
+						auto positionToString = [](u8 x, u8 y) -> std::string
+						{
+							char ch = x + 'a';
+							return ch + std::to_string(y + 1);
+						};
+
+						u8 offset = name == "a1" ? 0 : 1;
+						glm::vec3 dec = { 0.0f, 0.0f, 0.0f };
+						if (offset == 1)
+						{
+							dec.x = -CELL_SIZE;
+						}
+
+						for (u8 y = 0; y < 8; y++)
+						{
+							for (u8 x = offset; x < 8; x += 2)
+							{
+								float xOffset = x * CELL_SIZE;
+								float yOffset = y * CELL_SIZE;
+
+								std::string placeName = positionToString(x, y);
+
+								Node* node = m_Scene->AddNode(chessGround, placeName);
+								node->entity.AddComponent<MeshComponent>(mesh, material);
+								node->entity.GetComponent<TransformComponent>().translation += glm::vec3(xOffset, 0.0f, -yOffset) + dec;
+							}
+
+							offset = offset == 0 ? 1 : 0;
+						}
 					}
 					else
 					{
@@ -157,12 +184,12 @@ namespace Chess {
 		CreateViewportBasedPipelines();
 
 		auto makeMove = [&](i8 fromX, i8 fromY, i8 toX, i8 toY, TransformComponent& tc) -> void
-			{
-				float xDiff = toX - fromX;
-				float yDiff = toY - fromY;
-				glm::vec3 diff = glm::vec3(xDiff, 0.0f, -yDiff) * CELL_SIZE;
-				tc.translation += diff;
-			};
+		{
+			float xDiff = toX - fromX;
+			float yDiff = toY - fromY;
+			glm::vec3 diff = glm::vec3(xDiff, 0.0f, -yDiff) * CELL_SIZE;
+			tc.translation += diff;
+		};
 
 		for (Node* node : m_Scene->GetNodeByName("ChessPieces")->children)
 		{
@@ -319,9 +346,14 @@ namespace Chess {
 
 		std::sort(nodes.begin(), nodes.end(), [](Node* a, Node* b)
 		{
-			u64 mc1 = reinterpret_cast<u64>(a->entity.GetComponent<MeshComponent>().material.get());
-			u64 mc2 = reinterpret_cast<u64>(b->entity.GetComponent<MeshComponent>().material.get());
-			return mc1 < mc2;
+			const MeshComponent& mesh1component = a->entity.GetComponent<MeshComponent>();
+			const MeshComponent& mesh2component = b->entity.GetComponent<MeshComponent>();
+			Ref<Mesh> mesh1 = mesh1component.mesh;
+			Ref<Mesh> mesh2 = mesh2component.mesh;
+			Ref<Material> mat1 = mesh1component.material;
+			Ref<Material> mat2 = mesh2component.material;
+
+			return mesh1.get() < mesh2.get() || (mesh1.get() == mesh2.get() && mat1.get() < mat2.get());
 		});
 
 		float aspect = static_cast<float>(GetWindow()->GetWidth()) / GetWindow()->GetHeight();
@@ -360,17 +392,24 @@ namespace Chess {
 		wgpu::CommandEncoderDescriptor commandEncoderDesc;
 		commandEncoderDesc.label = "CommandEncoder";
 
+		Ref<Mesh> currentMesh = nodes[0]->entity.GetComponent<MeshComponent>().mesh;
 		Ref<Material> currentMaterial = nodes[0]->entity.GetComponent<MeshComponent>().material;
-		u32 instancesCount = 0;
+
+		size_t nodeIndexStart = 0, nodeIndexEnd = 0;
 
 		m_RenderObjectsBuffer.clear();
 		m_RenderMaterialsBuffer.clear();
 
+		u32 drawCalls = 0;
 		for (Node* node : nodes)
 		{
 			const MeshComponent& mc = node->entity.GetComponent<MeshComponent>();
-			if (currentMaterial == mc.material)
+			if (currentMesh == mc.mesh && currentMaterial == mc.material && m_RenderObjectsBuffer.size() < MAX_INSTANCE_OBJECT_COUNT)
 			{
+				const TransformComponent& transformComponent = node->entity.GetComponent<TransformComponent>();
+				const MeshComponent& meshComponent = node->entity.GetComponent<MeshComponent>();
+				const Ref<Material> material = meshComponent.material;
+
 				ObjectBuffer objectBuffer{
 					.model = transformComponent.worldMatrix,
 					.modelInv = glm::inverse(transformComponent.worldMatrix)
@@ -382,34 +421,67 @@ namespace Chess {
 					.specular = material->specular
 				};
 
-				m_RenderObjectsBuffer.push_back(cur)
+				m_RenderObjectsBuffer.push_back(std::move(objectBuffer));
+				m_RenderMaterialsBuffer.push_back(std::move(materialBuffer));
+
+				nodeIndexEnd++;
 			}
+			else
+			{
+				wgpu::CommandEncoder encoder = GraphicsContext::GetDevice().CreateCommandEncoder(&commandEncoderDesc);
+				wgpu::RenderPassEncoder renderPass = encoder.BeginRenderPass(&renderPassDesc);
 
-			wgpu::CommandEncoder encoder = GraphicsContext::GetDevice().CreateCommandEncoder(&commandEncoderDesc);
-			wgpu::RenderPassEncoder renderPass = encoder.BeginRenderPass(&renderPassDesc);
+				Node* renderNode = nodes[nodeIndexStart];
+				const TransformComponent& transformComponent = renderNode->entity.GetComponent<TransformComponent>();
+				const MeshComponent& meshComponent = renderNode->entity.GetComponent<MeshComponent>();
 
-			const TransformComponent& transformComponent = node->entity.GetComponent<TransformComponent>();
-			const MeshComponent& meshComponent = node->entity.GetComponent<MeshComponent>();
+				u64 from = meshComponent.mesh->vboView.from;
+				u64 to = meshComponent.mesh->vboView.to;
+				const Ref<Material>& material = meshComponent.material;
 
-			u64 from = meshComponent.mesh->vboView.from;
-			u64 to = meshComponent.mesh->vboView.to;
-			const Ref<Material>& material = meshComponent.material;
+				m_ObjectUbo->SetData(m_RenderObjectsBuffer.data(), sizeof(ObjectBuffer) * m_RenderObjectsBuffer.size());
+				m_MaterialUbo->SetData(m_RenderMaterialsBuffer.data(), sizeof(MaterialBuffer) * m_RenderMaterialsBuffer.size());
 
-			m_ObjectUbo->SetData(&objectBuffer, sizeof(ObjectBuffer));
-			m_MaterialUbo->SetData(&materialBuffer, sizeof(MaterialBuffer));
+				m_MainPipeline.Bind(renderPass);
 
-			m_MainPipeline.Bind(renderPass);
+				renderPass.Draw(to - from + 1, m_RenderObjectsBuffer.size(), from, 0);
+				renderPass.End();
 
-			renderPass.Draw(to - from + 1, 1, from, 0);
-			renderPass.End();
+				++drawCalls;
 
-			wgpu::CommandBufferDescriptor cmdBufferDescriptor;
-			cmdBufferDescriptor.label = "CommandBuffer";
-			wgpu::CommandBuffer command = encoder.Finish(&cmdBufferDescriptor);
-			GraphicsContext::GetQueue().Submit(1, &command);
+				m_RenderObjectsBuffer.clear();
+				m_RenderMaterialsBuffer.clear();
 
-			renderPassColorAttachment.loadOp = wgpu::LoadOp::Load;
-			depthStencilAttachment.depthLoadOp = wgpu::LoadOp::Load;
+				wgpu::CommandBufferDescriptor cmdBufferDescriptor;
+				cmdBufferDescriptor.label = "CommandBuffer";
+				wgpu::CommandBuffer command = encoder.Finish(&cmdBufferDescriptor);
+				GraphicsContext::GetQueue().Submit(1, &command);
+
+				renderPassColorAttachment.loadOp = wgpu::LoadOp::Load;
+				depthStencilAttachment.depthLoadOp = wgpu::LoadOp::Load;
+
+				nodeIndexStart = nodeIndexEnd++;
+
+				const TransformComponent& nextTransformComponent = node->entity.GetComponent<TransformComponent>();
+				const MeshComponent& nextMeshComponent = node->entity.GetComponent<MeshComponent>();
+
+				currentMesh = nextMeshComponent.mesh;
+				currentMaterial = nextMeshComponent.material;
+
+				ObjectBuffer objectBuffer{
+					.model = nextTransformComponent.worldMatrix,
+					.modelInv = glm::inverse(nextTransformComponent.worldMatrix)
+				};
+
+				MaterialBuffer materialBuffer{
+					.ambient = nextMeshComponent.material->ambient,
+					.diffuse = nextMeshComponent.material->diffuse,
+					.specular = nextMeshComponent.material->specular
+				};
+
+				m_RenderObjectsBuffer.push_back(std::move(objectBuffer));
+				m_RenderMaterialsBuffer.push_back(std::move(materialBuffer));
+			}
 		}
 
 		m_Renderer->Finish();

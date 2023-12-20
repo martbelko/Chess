@@ -52,7 +52,7 @@ namespace Chess {
 		Ref<DataBuffer> m_MaterialUbo;
 		RenderPipeline m_MainPipeline;
 		wgpu::TextureView m_DepthStencilTextureView;
-		std::vector<MaterialBuffer> m_RenderObjectsBuffer;
+		std::vector<ObjectBuffer> m_RenderObjectsBuffer;
 		std::vector<MaterialBuffer> m_RenderMaterialsBuffer;
 
 		ChessboardState m_ChessState;
