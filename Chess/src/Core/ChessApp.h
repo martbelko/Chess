@@ -8,7 +8,9 @@
 #include "Scene/Scene.h"
 #include "Scene/Camera.h"
 
-#include "Game/ChessState.h"
+#include "Game/ChessboardState.h"
+
+#include <unordered_map>
 
 namespace Chess {
 
@@ -38,7 +40,8 @@ namespace Chess {
 
 		virtual void RenderImGui() override {};
 	private:
-		void SetChessboardRender();
+		void SetChessboardSceneGraph(const ChessboardState& state);
+		void UpdateRenderTransforms(const ChessboardState& state);
 	private:
 		float m_LastFrameTime;
 		Renderer* m_Renderer;
@@ -55,9 +58,12 @@ namespace Chess {
 		std::vector<ObjectBuffer> m_RenderObjectsBuffer;
 		std::vector<MaterialBuffer> m_RenderMaterialsBuffer;
 
+		std::unordered_map<std::string, std::pair<Ref<Mesh>, Ref<Material>>> m_MeshMaterials;
+
 		ChessboardState m_ChessState;
 	private:
 		static inline constexpr u32 MAX_INSTANCE_OBJECT_COUNT = 10;
+		static inline constexpr float CELL_SIZE = 4.30658f;
 	};
 
 }

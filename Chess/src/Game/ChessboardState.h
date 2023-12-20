@@ -57,10 +57,10 @@ namespace Chess {
 	class ChessboardState
 	{
 	public:
-		constexpr void AddPiece(const Piece& activePiece)
+		constexpr void AddPiece(const Piece& piece)
 		{
-			ASSERT(std::find(m_Pieces.begin(), m_Pieces.end(), activePiece) == m_Pieces.end(), "Chessboard already contains identical piece");
-			m_Pieces.push_back(activePiece);
+			ASSERT(std::find(m_Pieces.begin(), m_Pieces.end(), piece) == m_Pieces.end(), "Chessboard already contains identical piece");
+			m_Pieces.push_back(piece);
 		}
 
 		constexpr void RemovePieceAtPosition(Position position)
@@ -90,6 +90,8 @@ namespace Chess {
 		}
 
 		constexpr const std::vector<Piece>& GetPieces() const { return m_Pieces; }
+	public:
+		static ChessboardState CreateDefault();
 	private:
 		std::vector<Piece> m_Pieces;
 	};

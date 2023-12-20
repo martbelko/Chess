@@ -41,7 +41,9 @@ add_executable(Chess
 	"src/Scene/Components.h"
 
 	"src/Game/Move.h"
-	"src/Game/ChessState.h")
+	"src/Game/ChessboardState.h"
+	"src/Game/ChessboardState.cpp"
+)
 
 target_compile_definitions(Chess
 	PRIVATE

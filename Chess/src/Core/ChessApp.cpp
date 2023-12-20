@@ -44,8 +44,6 @@ namespace Chess {
 
 		m_Scene = CreateRef<Scene>();
 
-		constexpr float CELL_SIZE = 4.30658f;
-
 		objl::Loader loader;
 		if (!loader.LoadFile("C:/Users/Pc/Desktop/chess-simple.obj"))
 		{
@@ -174,8 +172,7 @@ namespace Chess {
 					}
 					else
 					{
-						Node* node = m_Scene->AddNode(chessPieces, name);
-						node->entity.AddComponent<MeshComponent>(mesh, material);
+						m_MeshMaterials[name] = std::make_pair(mesh, material);
 					}
 				}
 			}
@@ -211,6 +208,9 @@ namespace Chess {
 
 		TransformComponent& tc = m_Scene->GetNodeByName("Chessboard")->entity.GetComponent<TransformComponent>();
 		//tc.translation = glm::vec3(10.0f, 0.0f, 0.0f);
+
+		m_ChessState = ChessboardState::CreateDefault();
+		SetChessboardSceneGraph(m_ChessState);
 	}
 
 	ChessApp::~ChessApp()
@@ -218,16 +218,52 @@ namespace Chess {
 		delete m_Renderer;
 	}
 
-	void ChessApp::SetChessboardRender()
+	void ChessApp::SetChessboardSceneGraph(const ChessboardState& state)
 	{
-		for (const Piece& piece : m_ChessState.GetPieces())
+		auto pieceToString = [](PieceType pieceType, PieceColor pieceColor) -> std::string
 		{
-			if (piece.IsActive())
+			std::string str;
+			switch (pieceType)
 			{
-				continue;
+			case PieceType::Pawn:
+				str = "Pawn";
+				break;
+			case PieceType::Rook:
+				str = "Rook";
+				break;
+			case PieceType::Knight:
+				str = "Knight";
+				break;
+			case PieceType::Bishop:
+				str = "Bishop";
+				break;
+			case PieceType::Queen:
+				str = "Queen";
+				break;
+			case PieceType::King:
+				str = "King";
+				break;
+			default:
+				ASSERT(false, "Unknown piece type");
+				break;
 			}
 
+			str += pieceColor == PieceColor::White ? "_White" : "_Black";
+			return str;
+		};
 
+		for (const Piece& piece : state.GetPieces())
+		{
+			std::string pieceName = pieceToString(piece.GetPieceType(), piece.GetPieceColor());
+			Node* chessPieces = m_Scene->GetNodeByName("ChessPieces");
+			Node* node = m_Scene->AddNode(chessPieces, pieceName);
+			const auto& [mesh, material] = m_MeshMaterials[pieceName];
+			node->entity.AddComponent<MeshComponent>(mesh, material);
+
+			TransformComponent& tc = node->entity.GetComponent<TransformComponent>();
+			Position pos = piece.GetPosition();
+			glm::vec3 diff = glm::vec3(pos.GetX(), 0.0f, -pos.GetY()) * CELL_SIZE;
+			tc.translation += diff;
 		}
 	}
 
@@ -482,6 +518,38 @@ namespace Chess {
 				m_RenderObjectsBuffer.push_back(std::move(objectBuffer));
 				m_RenderMaterialsBuffer.push_back(std::move(materialBuffer));
 			}
+		}
+
+		if (!m_RenderObjectsBuffer.empty())
+		{
+			wgpu::CommandEncoder encoder = GraphicsContext::GetDevice().CreateCommandEncoder(&commandEncoderDesc);
+			wgpu::RenderPassEncoder renderPass = encoder.BeginRenderPass(&renderPassDesc);
+
+			Node* renderNode = nodes[nodeIndexStart];
+			const TransformComponent& transformComponent = renderNode->entity.GetComponent<TransformComponent>();
+			const MeshComponent& meshComponent = renderNode->entity.GetComponent<MeshComponent>();
+
+			u64 from = meshComponent.mesh->vboView.from;
+			u64 to = meshComponent.mesh->vboView.to;
+			const Ref<Material>& material = meshComponent.material;
+
+			m_ObjectUbo->SetData(m_RenderObjectsBuffer.data(), sizeof(ObjectBuffer) * m_RenderObjectsBuffer.size());
+			m_MaterialUbo->SetData(m_RenderMaterialsBuffer.data(), sizeof(MaterialBuffer) * m_RenderMaterialsBuffer.size());
+
+			m_MainPipeline.Bind(renderPass);
+
+			renderPass.Draw(to - from + 1, m_RenderObjectsBuffer.size(), from, 0);
+			renderPass.End();
+
+			++drawCalls;
+
+			m_RenderObjectsBuffer.clear();
+			m_RenderMaterialsBuffer.clear();
+
+			wgpu::CommandBufferDescriptor cmdBufferDescriptor;
+			cmdBufferDescriptor.label = "CommandBuffer";
+			wgpu::CommandBuffer command = encoder.Finish(&cmdBufferDescriptor);
+			GraphicsContext::GetQueue().Submit(1, &command);
 		}
 
 		m_Renderer->Finish();
