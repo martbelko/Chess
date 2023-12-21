@@ -56,6 +56,7 @@ namespace Chess {
 				std::string name;
 				u64 endIndex;
 				Ref<Material> material;
+				BoundingBox bbox;
 			};
 
 			std::vector<Vertex3D> vertices;
@@ -83,6 +84,7 @@ namespace Chess {
 
 			for (const objl::Mesh& mesh : loader.LoadedMeshes)
 			{
+				BoundingBox bbox;
 				for (u32 index : mesh.Indices)
 				{
 					const objl::Vertex& vertex = mesh.Vertices[index];
@@ -98,13 +100,16 @@ namespace Chess {
 					float uvx = vertex.TextureCoordinate.X;
 					float uvy = vertex.TextureCoordinate.Y;
 
-					vertices.push_back(Vertex3D{ .position = { px, py, pz }, .normal = { nx, ny, nz }, .uv = { uvx, uvy } });
+					glm::vec3 position = { px, py, pz };
+					vertices.push_back(Vertex3D{ .position = position, .normal = { nx, ny, nz }, .uv = { uvx, uvy } });
+					bbox.Add(position);
 				}
 
 				meshDescs.push_back(MeshDesc{
 					.name = mesh.MeshName,
 					.endIndex = vertices.size(),
-					.material = m_MaterialSystem.GetMaterialByName(mesh.MeshMaterial.name)
+					.material = m_MaterialSystem.GetMaterialByName(mesh.MeshMaterial.name),
+					.bbox = bbox
 				});
 			}
 
@@ -123,7 +128,7 @@ namespace Chess {
 				VertexBufferView vboView = VertexBufferView(m_SceneVbo, from, endIndex - 1);
 				from = endIndex;
 
-				Ref<Mesh> mesh = CreateRef<Mesh>(vboView);
+				Ref<Mesh> mesh = CreateRef<Mesh>(vboView, meshDescs[i].bbox);
 
 				std::string name = meshDescs[i].name;
 				if (name == "Chessboard" || name == "Chessboard_2")
@@ -172,7 +177,7 @@ namespace Chess {
 					}
 					else
 					{
-						m_MeshMaterials[name] = std::make_pair(mesh, material);
+						m_PieceMeshMaterial[name] = std::make_pair(mesh, material);
 					}
 				}
 			}
@@ -257,7 +262,7 @@ namespace Chess {
 			std::string pieceName = pieceToString(piece.GetPieceType(), piece.GetPieceColor());
 			Node* chessPieces = m_Scene->GetNodeByName("ChessPieces");
 			Node* node = m_Scene->AddNode(chessPieces, pieceName);
-			const auto& [mesh, material] = m_MeshMaterials[pieceName];
+			const auto& [mesh, material] = m_PieceMeshMaterial[pieceName];
 			node->entity.AddComponent<MeshComponent>(mesh, material);
 
 			TransformComponent& tc = node->entity.GetComponent<TransformComponent>();
@@ -332,6 +337,13 @@ namespace Chess {
 		m_MainPipeline = builder.Build();
 	}
 
+	void ChessApp::TestMousePick(glm::vec2 coord)
+	{
+		auto [width, height] = GetWindow()->GetWindowSize();
+		coord.x /= width;
+		coord.y /= height;
+	}
+
 	void ChessApp::Update(Base::Timestep ts)
 	{
 		m_LastFrameTime = ts.GetSeconds();
@@ -356,6 +368,9 @@ namespace Chess {
 			}
 			case Base::EventType::MousePressed:
 				m_Camera.OnMouseButtonPressed(ev.as.mousePressedEvent);
+				double x, y;
+				glfwGetCursorPos(GetWindow()->GetWindowHandle(), &x, &y);
+				TestMousePick(glm::vec2(x, y));
 				break;
 			case Base::EventType::MouseReleased:
 				m_Camera.OnMouseButtonReleased(ev.as.mouseReleasedEvent);

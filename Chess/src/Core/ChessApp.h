@@ -41,7 +41,7 @@ namespace Chess {
 		virtual void RenderImGui() override {};
 	private:
 		void SetChessboardSceneGraph(const ChessboardState& state);
-		void UpdateRenderTransforms(const ChessboardState& state);
+		void TestMousePick(glm::vec2 coord);
 	private:
 		float m_LastFrameTime;
 		Renderer* m_Renderer;
@@ -58,7 +58,7 @@ namespace Chess {
 		std::vector<ObjectBuffer> m_RenderObjectsBuffer;
 		std::vector<MaterialBuffer> m_RenderMaterialsBuffer;
 
-		std::unordered_map<std::string, std::pair<Ref<Mesh>, Ref<Material>>> m_MeshMaterials;
+		std::unordered_map<std::string, std::pair<Ref<Mesh>, Ref<Material>>> m_PieceMeshMaterial;
 
 		ChessboardState m_ChessState;
 	private:
