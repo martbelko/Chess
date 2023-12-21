@@ -41,6 +41,7 @@ add_executable(Chess
 	"src/Scene/Components.h"
 
 	"src/Game/Move.h"
+	"src/Game/Move.cpp"
 	"src/Game/ChessboardState.h"
 	"src/Game/ChessboardState.cpp"
 )

@@ -12,7 +12,7 @@ namespace Chess {
 
 	enum class PieceType : u8 // 3 bits
 	{
-		Pawn = 0, Rook, Knight, Bishop, Queen, King
+		None = 0, Pawn, Rook, Knight, Bishop, Queen, King
 	};
 
 	enum class PieceColor : u8 // 1 bit
@@ -24,74 +24,104 @@ namespace Chess {
 	class Piece
 	{
 	public:
-		constexpr Piece(u8 x, u8 y, PieceType pieceType, PieceColor color, u8 pieceIndex)
-			: m_Data((x << 13) | (y << 10) | (static_cast<u8>(pieceType) << 7) | (static_cast<u8>(color) << 6) | 1u << 5 | (pieceIndex << 1)) {}
+		Piece(u8 x, u8 y)
+			: Piece(x, y, PieceType::None, PieceColor::White, 0) {}
+		Piece(u8 x, u8 y, PieceType pieceType, PieceColor color, u8 pieceIndex)
+			: m_Data((x << 13) | (y << 10) | (static_cast<u8>(pieceType) << 7) | (static_cast<u8>(color) << 6) | (pieceIndex << 2)) {}
 
-		constexpr Position GetPosition() const
+		Position GetPosition() const
 		{
 			u8 x = m_Data >> 13;
 			u8 y = (m_Data & Y_MASK) >> 10;
 			return Position(x, y);
 		}
 
-		constexpr PieceType GetPieceType() const { return static_cast<PieceType>(static_cast<u8>((m_Data & PIECE_MASK) >> 7)); }
-		constexpr PieceColor GetPieceColor() const { return static_cast<PieceColor>(static_cast<u8>(m_Data & COLOR_MASK) >> 6); }
-		constexpr bool IsActive() const { return static_cast<bool>((m_Data & ACTIVE_MASK) >> 5); }
-		constexpr u8 GetIndex() const { return static_cast<u8>((m_Data & INDEX_MASK) >> 2); }
-		constexpr bool HasMoved() const { return static_cast<bool>((m_Data & FIRST_MOVE_MASK) >> 1); }
+		bool IsValid() const { return GetPieceType() != PieceType::None; }
 
-		constexpr bool operator==(const Piece& other) const { return m_Data == other.m_Data; }
-		constexpr bool operator!=(const Piece& other) const { return m_Data == other.m_Data; }
+		PieceType GetPieceType() const { return static_cast<PieceType>(static_cast<u8>((m_Data & PIECE_MASK) >> 7)); }
+		PieceColor GetPieceColor() const { return static_cast<PieceColor>(static_cast<u8>(m_Data & COLOR_MASK) >> 6); }
+		bool IsActive() const { return static_cast<bool>((m_Data & ACTIVE_MASK) >> 5); }
+		u8 GetIndex() const { return static_cast<u8>((m_Data & INDEX_MASK) >> 2); }
+		bool HasMoved() const { return static_cast<bool>((m_Data & MOVED_MASK) >> 1); }
+
+		bool operator==(const Piece& other) const { return m_Data == other.m_Data; }
+		bool operator!=(const Piece& other) const { return m_Data == other.m_Data; }
+	private:
+		void SetPieceType(PieceType pieceType)
+		{
+			m_Data = m_Data & ~PIECE_MASK;
+			m_Data |= static_cast<u8>(pieceType) << 7;
+		}
+
+		void Moved()
+		{
+			m_Data = m_Data & ~MOVED_MASK;
+			m_Data |= 1u << 1;
+		}
 	private:
 		u16 m_Data;
 	private:
-		static inline constexpr u16 X_MASK =          0b1110'0000'0000'0000;
-		static inline constexpr u16 Y_MASK =          0b0001'1100'0000'0000;
-		static inline constexpr u16 PIECE_MASK =      0b0000'0011'1000'0000;
-		static inline constexpr u16 COLOR_MASK =      0b0000'0000'0100'0000;
-		static inline constexpr u16 ACTIVE_MASK =     0b0000'0000'0010'0000;
-		static inline constexpr u16 INDEX_MASK =      0b0000'0000'0001'1100;
-		static inline constexpr u16 FIRST_MOVE_MASK = 0b0000'0000'0000'0010;
+		static inline constexpr u16 X_MASK =      0b1110'0000'0000'0000;
+		static inline constexpr u16 Y_MASK =      0b0001'1100'0000'0000;
+		static inline constexpr u16 PIECE_MASK =  0b0000'0011'1000'0000;
+		static inline constexpr u16 COLOR_MASK =  0b0000'0000'0100'0000;
+		static inline constexpr u16 ACTIVE_MASK = 0b0000'0000'0010'0000;
+		static inline constexpr u16 INDEX_MASK =  0b0000'0000'0001'1100;
+		static inline constexpr u16 MOVED_MASK =  0b0000'0000'0000'0010;
+	private:
+		friend class ChessboardState;
 	};
 
 	class ChessboardState
 	{
 	public:
-		constexpr void AddPiece(const Piece& piece)
+		ChessboardState();
+
+		void SetPiece(const Piece& piece)
 		{
-			ASSERT(std::find(m_Pieces.begin(), m_Pieces.end(), piece) == m_Pieces.end(), "Chessboard already contains identical piece");
-			m_Pieces.push_back(piece);
+			Position position = piece.GetPosition();
+			u8 index = position.GetY() * 8 + position.GetX();
+			m_Pieces[index] = piece;
 		}
 
-		constexpr void RemovePieceAtPosition(Position position)
+		void RemovePieceAtPosition(Position position)
 		{
-			const Piece* piece = GetPieceAtPosition(position);
-			if (piece == nullptr)
+			Piece& piece = GetPieceAtPosition(position);
+			if (!piece.IsValid())
 			{
-				ASSERT(false, "Attempting to remove piece at position, where there is no active piece");
+				ASSERT(false, "Attempting to remove piece at position, where there is no valid piece");
 				return;
 			}
 
-			auto it = std::find(m_Pieces.begin(), m_Pieces.end(), *piece);
-			m_Pieces.erase(it);
+			piece.SetPieceType(PieceType::None);
 		}
 
-		constexpr const Piece* GetPieceAtPosition(Position position) const
+		const Piece& GetPieceAtPosition(Position position) const
 		{
-			for (const Piece& piece : m_Pieces)
-			{
-				if (piece.GetPosition() == position)
-				{
-					return &piece;
-				}
-			}
-
-			return nullptr;
+			u8 index = position.GetY() * 8 + position.GetX();
+			return m_Pieces[index];
 		}
 
-		constexpr const std::vector<Piece>& GetPieces() const { return m_Pieces; }
+		Piece& GetPieceAtPosition(Position position)
+		{
+			u8 index = position.GetY() * 8 + position.GetX();
+			return m_Pieces[index];
+		}
+
+		bool IsPositionOccupied(Position position) const
+		{
+			u8 index = GetFlatIndex(position);
+			return m_Pieces[index].GetPieceType() != PieceType::None;
+		}
+
+		std::vector<Position> GenerateAllMoves(Position position) const;
+
+		const std::vector<Piece>& GetPieces() const { return m_Pieces; }
 	public:
+		static u8 GetFlatIndex(Position position) { return position.GetY() * 8 + position.GetX(); }
 		static ChessboardState CreateDefault();
+	private:
+		std::vector<Position> GenerateAllMovesPawn(Position position) const;
 	private:
 		std::vector<Piece> m_Pieces;
 	};

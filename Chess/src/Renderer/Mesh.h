@@ -10,7 +10,7 @@ namespace Chess {
 	struct BoundingBox
 	{
 		glm::vec3 min = glm::vec3(std::numeric_limits<float>::max());
-		glm::vec3 max = glm::vec3(std::numeric_limits<float>::min());
+		glm::vec3 max = glm::vec3(-std::numeric_limits<float>::max());
 
 		void Add(const glm::vec3& p)
 		{

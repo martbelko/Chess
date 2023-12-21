@@ -42,6 +42,8 @@ namespace Chess {
 	private:
 		void SetChessboardSceneGraph(const ChessboardState& state);
 		void TestMousePick(glm::vec2 coord);
+		Position TranslationToChessCoord(const glm::vec3& translation) const;
+		void OnPositionSelected(Position position);
 	private:
 		float m_LastFrameTime;
 		Renderer* m_Renderer;
@@ -61,6 +63,8 @@ namespace Chess {
 		std::unordered_map<std::string, std::pair<Ref<Mesh>, Ref<Material>>> m_PieceMeshMaterial;
 
 		ChessboardState m_ChessState;
+		Position m_PendingPosition = Position::InvalidPosition;
+		std::vector<Position> m_PendingMoves;
 	private:
 		static inline constexpr u32 MAX_INSTANCE_OBJECT_COUNT = 10;
 		static inline constexpr float CELL_SIZE = 4.30658f;

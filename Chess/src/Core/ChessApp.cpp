@@ -216,6 +216,9 @@ namespace Chess {
 
 		m_ChessState = ChessboardState::CreateDefault();
 		SetChessboardSceneGraph(m_ChessState);
+
+		Ref<Material> selectedGroundMaterial = CreateRef<Material>(glm::vec4(0, 0, 0, 1), glm::vec4(0.1f, 0.2f, 0.8f, 1.0f), glm::vec4(0, 0, 0, 1));
+		m_MaterialSystem.RegisterMaterial("SelectedGroundPiece", selectedGroundMaterial);
 	}
 
 	ChessApp::~ChessApp()
@@ -249,8 +252,7 @@ namespace Chess {
 				str = "King";
 				break;
 			default:
-				ASSERT(false, "Unknown piece type");
-				break;
+				return "";
 			}
 
 			str += pieceColor == PieceColor::White ? "_White" : "_Black";
@@ -260,6 +262,11 @@ namespace Chess {
 		for (const Piece& piece : state.GetPieces())
 		{
 			std::string pieceName = pieceToString(piece.GetPieceType(), piece.GetPieceColor());
+			if (pieceName.empty())
+			{
+				continue;
+			}
+
 			Node* chessPieces = m_Scene->GetNodeByName("ChessPieces");
 			Node* node = m_Scene->AddNode(chessPieces, pieceName);
 			const auto& [mesh, material] = m_PieceMeshMaterial[pieceName];
@@ -337,11 +344,140 @@ namespace Chess {
 		m_MainPipeline = builder.Build();
 	}
 
+	struct Ray
+	{
+		glm::vec3 origin;
+		glm::vec3 direction;
+	};
+
+	static bool RayAABBIntersect(const Ray& ray, const BoundingBox& bbox)
+	{
+		float tmin = -INFINITY, tmax = INFINITY;
+
+		if (ray.direction.x != 0.0f)
+		{
+			float tx1 = (bbox.min.x - ray.origin.x) / ray.direction.x;
+			float tx2 = (bbox.max.x - ray.origin.x) / ray.direction.x;
+
+			tmin = glm::max(tmin, glm::min(tx1, tx2));
+			tmax = glm::min(tmax, glm::max(tx1, tx2));
+		}
+
+		if (ray.direction.y != 0.0f)
+		{
+			float ty1 = (bbox.min.y - ray.origin.y) / ray.direction.y;
+			float ty2 = (bbox.max.y - ray.origin.y) / ray.direction.y;
+
+			tmin = glm::max(tmin, glm::min(ty1, ty2));
+			tmax = glm::min(tmax, glm::max(ty1, ty2));
+		}
+
+		if (ray.direction.z != 0.0f)
+		{
+			float tz1 = (bbox.min.z - ray.origin.z) / ray.direction.z;
+			float tz2 = (bbox.max.z - ray.origin.z) / ray.direction.z;
+
+			tmin = glm::max(tmin, glm::min(tz1, tz2));
+			tmax = glm::min(tmax, glm::max(tz1, tz2));
+		}
+
+		return tmax >= tmin;
+	}
+
 	void ChessApp::TestMousePick(glm::vec2 coord)
 	{
 		auto [width, height] = GetWindow()->GetWindowSize();
+		coord.y = height - coord.y;
 		coord.x /= width;
 		coord.y /= height;
+
+		coord = coord * 2.0f - 1.0f; // -1 -> 1
+
+		glm::mat4 inverseView = glm::inverse(m_Camera.GetViewMatrix());
+		glm::vec4 target = glm::inverse(m_Camera.GetProjectionMatrix()) * glm::vec4(coord.x, coord.y, 1, 1);
+
+		Ray ray;
+		ray.origin = m_Camera.GetPosition();
+		ray.direction = glm::vec3(inverseView * glm::vec4(glm::normalize(glm::vec3(target) / target.w), 0));
+		ray.direction = glm::normalize(ray.direction);
+
+		std::vector<Node*> chessGround = m_Scene->GetNodeByName("ChessGround")->children;
+
+		for (Node* node : chessGround)
+		{
+			const TransformComponent& tc = node->entity.GetComponent<TransformComponent>();
+			MeshComponent& mc = node->entity.GetComponent<MeshComponent>();
+			BoundingBox bbox = BoundingBox{
+				.min = mc.mesh->bbox.min + tc.translation,
+				.max = mc.mesh->bbox.max + tc.translation
+			};
+
+			if (RayAABBIntersect(ray, bbox))
+			{
+				const std::string& tag = node->entity.GetComponent<TagComponent>().tag;
+				Position position = Position::StringToPosition(tag);
+				OnPositionSelected(position);
+				return;
+			}
+		}
+
+		OnPositionSelected(Position::InvalidPosition);
+	}
+
+	Position ChessApp::TranslationToChessCoord(const glm::vec3& translation) const
+	{
+		Node* a1Node = m_Scene->GetNodeByName("a1");
+		const TransformComponent& tc = a1Node->entity.GetComponent<TransformComponent>();
+		glm::vec3 offset = translation - tc.translation;
+		offset /= CELL_SIZE;
+
+		u8 x = static_cast<u8>(offset.x);
+		u8 y = static_cast<u8>(offset.y);
+		return Position(x, y);
+	}
+
+	void ChessApp::OnPositionSelected(Position position)
+	{
+		std::vector<Node*> chessGround = m_Scene->GetNodeByName("ChessGround")->children;
+		for (Node* node : chessGround)
+		{
+			const std::string& tag = node->entity.GetComponent<TagComponent>().tag;
+			bool isWhite = Position::StringToPosition(tag).IsWhite();
+			node->entity.GetComponent<MeshComponent>().material = isWhite ?
+				m_MaterialSystem.GetMaterialByName("White") :
+				m_MaterialSystem.GetMaterialByName("Black");
+		}
+
+		if (!position.IsValid())
+		{
+			m_PendingPosition = Position::InvalidPosition;
+			return;
+		}
+
+		bool isValidSelection = std::find(m_PendingMoves.begin(), m_PendingMoves.end(), position) != m_PendingMoves.end();
+		if (m_PendingPosition.IsValid() && isValidSelection)
+		{
+			LOG_TRACE("Move to {0}", position.ToString());
+			m_PendingPosition = Position::InvalidPosition;
+		}
+		else
+		{
+			if (!m_ChessState.IsPositionOccupied(position))
+			{
+				return;
+			}
+
+			m_PendingMoves = m_ChessState.GenerateAllMoves(position);
+			const Ref<Material>& applyMaterial = m_MaterialSystem.GetMaterialByName("SelectedGroundPiece");
+
+			for (const Position& possiblePosition : m_PendingMoves)
+			{
+				Node* possibleNode = m_Scene->GetNodeByName(possiblePosition.ToString());
+				possibleNode->entity.GetComponent<MeshComponent>().material = applyMaterial;
+			}
+
+			m_PendingPosition = position;
+		}
 	}
 
 	void ChessApp::Update(Base::Timestep ts)
